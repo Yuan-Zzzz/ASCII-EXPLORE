@@ -1,0 +1,128 @@
+class_name SurfaceSampler
+extends RefCounted
+## 网格表面采样（对齐 threejs sampleSurface）：按面积加权 + 空间哈希去重。
+
+
+static func sample_mesh(mesh: Mesh, spacing: float = 0.35, seed: int = 1) -> Dictionary:
+	## 返回 { "positions": PackedVector3Array, "normals": PackedVector3Array }
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+
+	var arrays := _mesh_arrays(mesh)
+	if arrays.is_empty():
+		return {"positions": PackedVector3Array(), "normals": PackedVector3Array()}
+
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var norms: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+
+	if verts.is_empty():
+		return {"positions": PackedVector3Array(), "normals": PackedVector3Array()}
+
+	if norms.is_empty():
+		norms = PackedVector3Array()
+		norms.resize(verts.size())
+		for i in verts.size():
+			norms[i] = Vector3.UP
+
+	var tris: Array[PackedInt32Array] = []
+	if indices.is_empty():
+		for i in range(0, verts.size() - 2, 3):
+			tris.append(PackedInt32Array([i, i + 1, i + 2]))
+	else:
+		for i in range(0, indices.size() - 2, 3):
+			tris.append(PackedInt32Array([indices[i], indices[i + 1], indices[i + 2]]))
+
+	var areas: PackedFloat32Array = PackedFloat32Array()
+	areas.resize(tris.size())
+	var total_area := 0.0
+	for t in range(tris.size()):
+		var a: Vector3 = verts[tris[t][0]]
+		var b: Vector3 = verts[tris[t][1]]
+		var c: Vector3 = verts[tris[t][2]]
+		var area: float = (b - a).cross(c - a).length() * 0.5
+		areas[t] = area
+		total_area += area
+
+	var target := int(ceil(total_area / maxf(spacing * spacing, 0.0001) * 2.2))
+	target = clampi(target, 1, 200000)
+
+	var cell := spacing
+	var hash_map: Dictionary = {}
+	var positions := PackedVector3Array()
+	var out_normals := PackedVector3Array()
+	var min2 := spacing * spacing * 0.8
+
+	for _i in target:
+		var tri_i := _pick_triangle(rng, areas, total_area)
+		var i0: int = tris[tri_i][0]
+		var i1: int = tris[tri_i][1]
+		var i2: int = tris[tri_i][2]
+		var bary := _random_barycentric(rng)
+		var p: Vector3 = verts[i0] * bary.x + verts[i1] * bary.y + verts[i2] * bary.z
+		var n: Vector3 = (norms[i0] * bary.x + norms[i1] * bary.y + norms[i2] * bary.z).normalized()
+		if n.length_squared() < 0.01:
+			n = (verts[i1] - verts[i0]).cross(verts[i2] - verts[i0]).normalized()
+
+		var cx := int(floor(p.x / cell))
+		var cy := int(floor(p.y / cell))
+		var cz := int(floor(p.z / cell))
+		var ok := true
+		for dx in range(-1, 2):
+			if not ok:
+				break
+			for dy in range(-1, 2):
+				if not ok:
+					break
+				for dz in range(-1, 2):
+					var key := Vector3i(cx + dx, cy + dy, cz + dz)
+					if not hash_map.has(key):
+						continue
+					for q in hash_map[key]:
+						if p.distance_squared_to(q) < min2:
+							ok = false
+							break
+					if not ok:
+						break
+		if not ok:
+			continue
+
+		var home := Vector3i(cx, cy, cz)
+		if not hash_map.has(home):
+			hash_map[home] = []
+		hash_map[home].append(p)
+		positions.append(p)
+		out_normals.append(n)
+
+	return {"positions": positions, "normals": out_normals}
+
+
+static func _mesh_arrays(mesh: Mesh) -> Array:
+	if mesh is ArrayMesh:
+		var am := mesh as ArrayMesh
+		if am.get_surface_count() == 0:
+			return []
+		return am.surface_get_arrays(0)
+	if mesh is PrimitiveMesh:
+		return (mesh as PrimitiveMesh).get_mesh_arrays()
+	return []
+
+
+static func _pick_triangle(rng: RandomNumberGenerator, areas: PackedFloat32Array, total: float) -> int:
+	var r := rng.randf() * total
+	var acc := 0.0
+	for i in areas.size():
+		acc += areas[i]
+		if r <= acc:
+			return i
+	return areas.size() - 1
+
+
+static func _random_barycentric(rng: RandomNumberGenerator) -> Vector3:
+	var u := rng.randf()
+	var v := rng.randf()
+	if u + v > 1.0:
+		u = 1.0 - u
+		v = 1.0 - v
+	var w := 1.0 - u - v
+	return Vector3(u, v, w)

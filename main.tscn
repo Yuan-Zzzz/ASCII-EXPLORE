@@ -82,6 +82,7 @@ mesh = SubResource("Mesh_box")
 layer = 10
 
 [node name="AsciiOverlay" type="ColorRect" parent="AsciiLayer"]
+visible = false
 material = SubResource("ShaderMaterial_ascii")
 anchors_preset = 15
 anchor_right = 1.0
@@ -97,5 +98,5 @@ offset_right = 760.0
 offset_bottom = 96.0
 theme_override_colors/font_color = Color(0.75, 0.88, 1, 0.85)
 theme_override_font_sizes/font_size = 14
-text = "ASCII Post
-拖拽旋转 · 滚轮字号 · 空格慢转 · T 开关ASCII · C 单色 · Esc 退出"
+text = "ASCII GlyphField
+拖拽旋转 · 滚轮字号 · 空格慢转 · T 切换模式 · C 单色 · Esc 退出"
