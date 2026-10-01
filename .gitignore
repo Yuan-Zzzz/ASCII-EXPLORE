@@ -1,0 +1,4 @@
+# Godot 4+ specific ignores
+.godot/
+ascii_shot.png
+ascii_shot.png.import
