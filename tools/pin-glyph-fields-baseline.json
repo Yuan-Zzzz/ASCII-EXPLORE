@@ -1,0 +1,73 @@
+{
+    "hosts": [
+        {
+            "child_count_glyph": 1,
+            "fields": [
+                {
+                    "glyph_px": 12.0,
+                    "instance_count": 1102,
+                    "name": "GlyphField",
+                    "ramp_path": "res://features/ascii/ascii_ramp.tres",
+                    "rebuild_on_ready": true,
+                    "seed": 11,
+                    "spacing": 0.32,
+                    "tint": [
+                        0.779999971389771,
+                        0.819999992847443,
+                        0.899999976158142,
+                        1.0
+                    ],
+                    "visible": true
+                }
+            ],
+            "host": "Pivot/Ground"
+        },
+        {
+            "child_count_glyph": 1,
+            "fields": [
+                {
+                    "glyph_px": 12.0,
+                    "instance_count": 337,
+                    "name": "GlyphField",
+                    "ramp_path": "res://features/ascii/ascii_ramp.tres",
+                    "rebuild_on_ready": true,
+                    "seed": 21,
+                    "spacing": 0.16,
+                    "tint": [
+                        0.449999988079071,
+                        0.75,
+                        1.0,
+                        1.0
+                    ],
+                    "visible": true
+                }
+            ],
+            "host": "Pivot/Earth"
+        },
+        {
+            "child_count_glyph": 1,
+            "fields": [
+                {
+                    "glyph_px": 12.0,
+                    "instance_count": 333,
+                    "name": "GlyphField",
+                    "ramp_path": "res://features/ascii/ascii_ramp.tres",
+                    "rebuild_on_ready": true,
+                    "seed": 31,
+                    "spacing": 0.14,
+                    "tint": [
+                        1.0,
+                        0.879999995231628,
+                        0.400000005960464,
+                        1.0
+                    ],
+                    "visible": true
+                }
+            ],
+            "host": "Pivot/SunBall"
+        }
+    ],
+    "main_glyph_px": 12.0,
+    "main_ramp": "res://features/ascii/ascii_ramp.tres",
+    "view_mode": 0
+}
