@@ -1,8 +1,9 @@
-[gd_scene load_steps=11 format=3 uid="uid://d1w78rp3yf66i"]
+[gd_scene load_steps=12 format=3 uid="uid://d1w78rp3yf66i"]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Resource" path="res://features/ascii/ascii_ramp.tres" id="2_ramp"]
 [ext_resource type="Shader" path="res://features/ascii/ascii_post.gdshader" id="3_shader"]
+[ext_resource type="Script" path="res://features/ascii/glyph_field.gd" id="4_glyph"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -68,15 +69,42 @@ fov = 55.0
 material_override = SubResource("Mat_ground")
 mesh = SubResource("Mesh_ground")
 
+[node name="GlyphField" type="MultiMeshInstance3D" parent="Pivot/Ground"]
+script = ExtResource("4_glyph")
+ramp = ExtResource("2_ramp")
+spacing = 0.32
+seed = 11
+glyph_px = 12.0
+tint = Color(0.78, 0.82, 0.9, 1)
+rebuild_on_ready = true
+
 [node name="Earth" type="MeshInstance3D" parent="Pivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.2, 0)
 material_override = SubResource("Mat_sphere")
 mesh = SubResource("Mesh_sphere")
 
+[node name="GlyphField" type="MultiMeshInstance3D" parent="Pivot/Earth"]
+script = ExtResource("4_glyph")
+ramp = ExtResource("2_ramp")
+spacing = 0.16
+seed = 21
+glyph_px = 12.0
+tint = Color(0.45, 0.75, 1.0, 1)
+rebuild_on_ready = true
+
 [node name="SunBall" type="MeshInstance3D" parent="Pivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6, 1.4, 0.4)
 material_override = SubResource("Mat_box")
 mesh = SubResource("Mesh_box")
+
+[node name="GlyphField" type="MultiMeshInstance3D" parent="Pivot/SunBall"]
+script = ExtResource("4_glyph")
+ramp = ExtResource("2_ramp")
+spacing = 0.14
+seed = 31
+glyph_px = 12.0
+tint = Color(1.0, 0.88, 0.4, 1)
+rebuild_on_ready = true
 
 [node name="AsciiLayer" type="CanvasLayer" parent="."]
 layer = 10

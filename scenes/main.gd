@@ -88,25 +88,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_glyph_fields() -> void:
 	_glyph_fields.clear()
-	_add_field(ground, 0.32, 11, Color(0.78, 0.82, 0.9))
-	_add_field(earth, 0.16, 21, Color(0.45, 0.75, 1.0))
-	_add_field(sun_ball, 0.14, 31, Color(1.0, 0.88, 0.4))
+	for host in [ground, earth, sun_ball]:
+		_append_glyph_field(host)
 
 
-func _add_field(host: MeshInstance3D, spacing: float, seed: int, tint: Color) -> void:
-	for c in host.get_children():
-		if c.get_script() == GlyphFieldScript:
-			c.queue_free()
-	var field: Node = GlyphFieldScript.new()
-	field.name = "GlyphField"
-	field.set("ramp", ramp)
-	field.set("spacing", spacing)
-	field.set("seed", seed)
-	field.set("glyph_px", glyph_px)
-	field.set("tint", tint)
-	field.set("rebuild_on_ready", true)
-	host.add_child(field)
-	_glyph_fields.append(field)
+func _append_glyph_field(host: Node) -> void:
+	for child in host.get_children():
+		if child.get_script() == GlyphFieldScript:
+			_glyph_fields.append(child)
 
 
 func _apply_view_mode() -> void:
