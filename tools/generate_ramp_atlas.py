@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """从 AsciiRamp 的阶梯字符串生成单行 atlas.png。
 
-默认阶梯与 ascii/ascii_ramp.tres 一致：
+默认阶梯与 features/ascii/ascii_ramp.tres 一致：
   " .:-=+*#%@"   （左暗右亮）
 
 用法：
@@ -59,7 +59,7 @@ metadata={{
 
 [deps]
 
-source_file="res://ascii/{path.name}"
+source_file="res://features/ascii/{path.name}"
 dest_files=["{dest}"]
 
 [params]
@@ -98,7 +98,7 @@ def main() -> None:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path(__file__).resolve().parent.parent / "ascii" / "atlas.png",
+        default=Path(__file__).resolve().parent.parent / "features" / "ascii" / "atlas.png",
     )
     args = parser.parse_args()
 

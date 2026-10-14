@@ -2,7 +2,7 @@ class_name GlyphField
 extends MultiMeshInstance3D
 ## 在 MeshInstance3D 表面生成字符点 MultiMesh（Three.js GlyphField 思路）。
 
-const SurfaceSamplerScript = preload("res://ascii/surface_sampler.gd")
+const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 
 @export var ramp: AsciiRamp
 @export var spacing: float = 0.35
@@ -27,7 +27,7 @@ func rebuild() -> void:
 		push_warning("GlyphField 需要挂在带 mesh 的 MeshInstance3D 下")
 		return
 	if ramp == null:
-		ramp = load("res://ascii/ascii_ramp.tres") as AsciiRamp
+		ramp = load("res://features/ascii/ascii_ramp.tres") as AsciiRamp
 
 	var sampled: Dictionary = SurfaceSamplerScript.sample_mesh(host.mesh, spacing, seed)
 	var positions: PackedVector3Array = sampled["positions"]
@@ -64,7 +64,7 @@ func _ensure_material() -> void:
 	if _shader_mat != null:
 		material_override = _shader_mat
 		return
-	var sh: Shader = load("res://ascii/glyph_billboard.gdshader") as Shader
+	var sh: Shader = load("res://features/ascii/glyph_billboard.gdshader") as Shader
 	_shader_mat = ShaderMaterial.new()
 	_shader_mat.shader = sh
 	material_override = _shader_mat

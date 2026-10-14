@@ -6,7 +6,7 @@ extends Resource
 ##   index = clamp(int(brightness * char_count), 0, char_count - 1)
 ##   再用 atlas 第 index 格画字符。
 ##
-## 改字符：只改 ramp 字符串，然后运行 tools/generate_ramp_atlas.py
+## 改字符：只改 ramp 字符串，然后运行 tools/generate_ramp_atlas.py（写出 features/ascii/atlas.png）
 
 ## 从暗到亮。空格表示最暗（几乎看不见）
 @export var ramp: String = " .:-=+*#%@"

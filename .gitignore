@@ -1,4 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
+# Runtime capture from --shot (not source)
 ascii_shot.png
 ascii_shot.png.import
+# Local decision trail (figure-it-out / show-me-your-work)
+.audit/

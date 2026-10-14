@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="AsciiRamp" format=3 uid="uid://b0twgmr8b5juc"]
+
+[ext_resource type="Script" uid="uid://dubbd26hwbeie" path="res://features/ascii/ascii_ramp.gd" id="1_ramp"]
+[ext_resource type="Texture2D" uid="uid://8mhsgvqloewl" path="res://features/ascii/atlas.png" id="2_atlas"]
+
+[resource]
+script = ExtResource("1_ramp")
+atlas = ExtResource("2_atlas")

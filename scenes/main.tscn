@@ -1,8 +1,8 @@
 [gd_scene load_steps=11 format=3 uid="uid://d1w78rp3yf66i"]
 
-[ext_resource type="Script" path="res://main.gd" id="1_main"]
-[ext_resource type="Resource" path="res://ascii/ascii_ramp.tres" id="2_ramp"]
-[ext_resource type="Shader" path="res://ascii/ascii_post.gdshader" id="3_shader"]
+[ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
+[ext_resource type="Resource" path="res://features/ascii/ascii_ramp.tres" id="2_ramp"]
+[ext_resource type="Shader" path="res://features/ascii/ascii_post.gdshader" id="3_shader"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1

@@ -2,7 +2,7 @@ extends Node3D
 
 ## 三种显示：3D字符点(MultiMesh) / 原始模型 / 全屏后处理ASCII
 
-const GlyphFieldScript = preload("res://ascii/glyph_field.gd")
+const GlyphFieldScript = preload("res://features/ascii/glyph_field.gd")
 
 enum ViewMode { GLYPHS, RAW, POST }
 
@@ -30,7 +30,7 @@ var _saved_overrides: Dictionary = {}
 
 func _ready() -> void:
 	if ramp == null:
-		ramp = load("res://ascii/ascii_ramp.tres") as AsciiRamp
+		ramp = load("res://features/ascii/ascii_ramp.tres") as AsciiRamp
 
 	_post_mat = overlay.material as ShaderMaterial
 	_build_glyph_fields()
