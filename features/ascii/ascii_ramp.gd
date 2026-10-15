@@ -1,4 +1,3 @@
-@tool
 class_name AsciiRamp
 extends Resource
 ## 最简 ASCII 映射：一条「暗 → 亮」字符阶梯。
