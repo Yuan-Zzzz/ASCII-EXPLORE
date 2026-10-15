@@ -1,10 +1,10 @@
 class_name MoonFpsController
 extends CharacterBody3D
 
-## 球心与半径。每帧行走只用球心求当地的上方向。
+## 每帧以球心求当地上方向，实际地面高度由地形碰撞决定。
 class WorldFrame:
 	var center: Vector3 = Vector3.ZERO
-	var radius: float = 48.0
+
 
 	func up_at(pos: Vector3) -> Vector3:
 		var offset := pos - center
@@ -29,11 +29,8 @@ var _pitch := 0.0
 
 func _ready() -> void:
 	var body := get_node(moon_body_path) as StaticBody3D
-	var shape_node := body.get_node("CollisionShape3D") as CollisionShape3D
-	var sphere := shape_node.shape as SphereShape3D
 	_frame = WorldFrame.new()
 	_frame.center = body.global_position
-	_frame.radius = sphere.radius
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -18,24 +18,34 @@ func _run() -> void:
 	for _i in SETTLED_FRAMES:
 		await process_frame
 
-	var moon_shape := main.get_node("Moon/CollisionShape3D").shape as SphereShape3D
-	var moon_mesh := main.get_node("Moon/MoonMesh").mesh as SphereMesh
+	var moon := main.get_node("Moon")
+	var moon_shape := main.get_node("Moon/CollisionShape3D").shape as ConcavePolygonShape3D
+	var moon_mesh := main.get_node("Moon/MoonMesh").mesh as ArrayMesh
 	if moon_shape == null or moon_mesh == null:
-		_fail("moon collision or mesh missing")
+		_fail("terrain collision or mesh missing")
 		return
-	if absf(moon_shape.radius - moon_mesh.radius) > 0.001:
-		_fail("radius mismatch")
+	var moon_radius: float = moon.radius
+	var center := Vector3(0.0, cos(0.29), -sin(0.29))
+	if moon.surface_radius(center) > moon_radius - 1.5:
+		_fail("main crater has no depressed floor")
 		return
-	if moon_shape.radius < 40.0 or moon_shape.radius > 55.0:
-		_fail("moon radius %s" % moon_shape.radius)
+	var rim_dir := center.rotated(Vector3.RIGHT, -2.0 * asin(8.0 / (2.0 * moon_radius)))
+	if moon.surface_radius(rim_dir) <= moon_radius + 0.3:
+		_fail("main crater has no raised rim")
+		return
+	# 验证坑底碰撞与可见网格同源，射线必须击中凹陷表面。
+	var query := PhysicsRayQueryParameters3D.create(center * 60.0, center * 40.0, 1)
+	var hit: Dictionary = main.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or absf(hit.position.length() - moon.surface_radius(center)) > 0.12:
+		_fail("crater floor collision mismatch")
 		return
 
 	var player := main.get_node("Player") as CharacterBody3D
 	var dist := player.global_position.length()
-	if dist <= moon_shape.radius:
+	if dist <= moon_radius:
 		_fail("player inside moon dist=%s" % dist)
 		return
-	if dist > moon_shape.radius + 4.0:
+	if dist > moon_radius + 4.0:
 		_fail("player too far dist=%s" % dist)
 		return
 	if not player.is_on_floor():
@@ -43,7 +53,7 @@ func _run() -> void:
 		return
 
 	var camera := player.get_node("Camera3D") as Camera3D
-	if camera.global_position.length() <= moon_shape.radius:
+	if camera.global_position.length() <= moon_radius:
 		_fail("camera inside moon")
 		return
 
@@ -81,9 +91,22 @@ func _run() -> void:
 		_fail("glyph light_dir not synced")
 		return
 
+	# 将角色放到主坑内，确保不会站在原来的隐形球面上。
+	player.global_position = center * (moon_radius + 2.0)
+	player.velocity = Vector3.ZERO
+	for _i in 150:
+		await physics_frame
+	var floor_radius: float = moon.surface_radius(center)
+	if not player.is_on_floor() or player.global_position.length() >= moon_radius:
+		_fail("player did not settle inside crater")
+		return
+	if absf(player.global_position.length() - floor_radius - 0.85) > 0.2:
+		_fail("player crater floor height mismatch")
+		return
+
 	print(
 		"SMOKE_OK moon=%d earth=%d player_radius=%.4f moon_radius=%.4f"
-		% [moon_n, earth_n, dist, moon_shape.radius]
+		% [moon_n, earth_n, dist, moon_radius]
 	)
 	quit(0)
 

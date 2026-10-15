@@ -47,6 +47,14 @@ static func sample_mesh(mesh: Mesh, spacing: float = 0.35, seed: int = 1) -> Dic
 	var target := int(ceil(total_area / maxf(spacing * spacing, 0.0001) * 2.2))
 	target = clampi(target, 1, 200000)
 
+	# Build once; each candidate then selects a triangle in O(log triangles).
+	var cumulative := PackedFloat64Array()
+	cumulative.resize(areas.size())
+	var accumulated := 0.0
+	for i in areas.size():
+		accumulated += areas[i]
+		cumulative[i] = accumulated
+
 	var cell := spacing
 	var hash_map: Dictionary = {}
 	var positions := PackedVector3Array()
@@ -54,7 +62,7 @@ static func sample_mesh(mesh: Mesh, spacing: float = 0.35, seed: int = 1) -> Dic
 	var min2 := spacing * spacing * 0.8
 
 	for _i in target:
-		var tri_i := _pick_triangle(rng, areas, total_area)
+		var tri_i := _pick_triangle(rng, cumulative, total_area)
 		var i0: int = tris[tri_i][0]
 		var i1: int = tris[tri_i][1]
 		var i2: int = tris[tri_i][2]
@@ -108,14 +116,17 @@ static func _mesh_arrays(mesh: Mesh) -> Array:
 	return []
 
 
-static func _pick_triangle(rng: RandomNumberGenerator, areas: PackedFloat32Array, total: float) -> int:
+static func _pick_triangle(rng: RandomNumberGenerator, cumulative: PackedFloat64Array, total: float) -> int:
 	var r := rng.randf() * total
-	var acc := 0.0
-	for i in areas.size():
-		acc += areas[i]
-		if r <= acc:
-			return i
-	return areas.size() - 1
+	var low := 0
+	var high := cumulative.size() - 1
+	while low < high:
+		var mid := (low + high) >> 1
+		if r <= cumulative[mid]:
+			high = mid
+		else:
+			low = mid + 1
+	return low
 
 
 static func _random_barycentric(rng: RandomNumberGenerator) -> Vector3:
