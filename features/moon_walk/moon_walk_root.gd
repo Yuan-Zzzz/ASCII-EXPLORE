@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 
 const GlyphFieldScript = preload("res://features/ascii/glyph_field.gd")
@@ -11,7 +12,7 @@ var _glyph_fields: Array[Node] = []
 
 
 func _ready() -> void:
-	if DisplayServer.get_name() != "headless":
+	if not Engine.is_editor_hint() and DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	# 平行光沿本地 -Z 射出。字形 Lambert 要的是指向光源的方向，即 +Z。
 	sun_light.look_at(Vector3.ZERO, Vector3.UP)
@@ -25,6 +26,8 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if Engine.is_editor_hint():
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

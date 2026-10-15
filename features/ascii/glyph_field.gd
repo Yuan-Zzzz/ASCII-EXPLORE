@@ -1,3 +1,4 @@
+@tool
 class_name GlyphField
 extends MultiMeshInstance3D
 ## 在 MeshInstance3D 表面生成字符点 MultiMesh（Three.js GlyphField 思路）。
@@ -14,23 +15,61 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 @export var rebuild_on_ready: bool = true
 
 var _shader_mat: ShaderMaterial
+var _preview_mesh: Mesh
+var _preview_signature: Array = []
+var _preview_wait: float = 0.0
+var _preview_dirty: bool = false
 
 
 func _ready() -> void:
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
+	var host := get_parent() as MeshInstance3D
+	if host != null:
+		_preview_signature = [host.mesh, spacing, seed]
 	if rebuild_on_ready:
 		rebuild()
+
+
+# 编辑器只在采样输入变化后重建，拖动检查器参数时合并更新。
+func _process(delta: float) -> void:
+	if not Engine.is_editor_hint():
+		return
+	var host := get_parent() as MeshInstance3D
+	if host == null:
+		return
+	if _preview_mesh != host.mesh:
+		if is_instance_valid(_preview_mesh) and _preview_mesh.changed.is_connected(_queue_preview):
+			_preview_mesh.changed.disconnect(_queue_preview)
+		_preview_mesh = host.mesh
+		if _preview_mesh != null:
+			_preview_mesh.changed.connect(_queue_preview)
+	var signature := [host.mesh, spacing, seed]
+	if signature != _preview_signature:
+		_preview_signature = signature
+		_queue_preview()
+	if _preview_dirty:
+		_preview_wait -= delta
+		if _preview_wait <= 0.0:
+			_preview_dirty = false
+			rebuild()
+	_apply_params()
+
+
+func _queue_preview() -> void:
+	_preview_dirty = true
+	_preview_wait = 0.25
 
 
 func rebuild() -> void:
 	var host := get_parent() as MeshInstance3D
 	if host == null or host.mesh == null:
+		multimesh = null
 		push_warning("GlyphField 需要挂在带 mesh 的 MeshInstance3D 下")
 		return
 	if ramp == null:
 		ramp = load("res://features/ascii/ascii_ramp.tres") as AsciiRamp
 
-	var sampled: Dictionary = SurfaceSamplerScript.sample_mesh(host.mesh, spacing, seed)
+	var sampled: Dictionary = SurfaceSamplerScript.sample_mesh(host.mesh, maxf(spacing, 0.05), seed)
 	var positions: PackedVector3Array = sampled["positions"]
 	var normals: PackedVector3Array = sampled["normals"]
 	var count: int = positions.size()

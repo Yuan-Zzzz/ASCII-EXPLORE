@@ -47,7 +47,7 @@ void vertex() {
 	float w = max(abs(clip.w), 1e-4);
 	vec2 ndc = clip.xy / w;
 
-	vec2 half_px = vec2(u_glyph_px) / max(u_viewport_size, vec2(1.0));
+	vec2 half_px = vec2(u_glyph_px) / max(VIEWPORT_SIZE, vec2(1.0));
 	ndc += VERTEX.xy * 2.0 * half_px;
 
 	clip.xy = ndc * w;

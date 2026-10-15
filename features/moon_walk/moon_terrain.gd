@@ -1,5 +1,5 @@
 extends StaticBody3D
-## 同一份位移网格用于深度遮挡、字符采样和静态地形碰撞。
+## 地形参数与离线模型构建；运行时直接加载已保存的网格与碰撞资源。
 
 @export var radius: float = 48.0
 @export var terrain_seed: int = 4817
@@ -9,6 +9,10 @@ var _craters: Array[Vector4] = []
 
 
 func _enter_tree() -> void:
+	_make_craters()
+
+
+func build_mesh() -> ArrayMesh:
 	_make_craters()
 	var sphere := SphereMesh.new()
 	sphere.radius = radius
@@ -35,8 +39,7 @@ func _enter_tree() -> void:
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	var terrain := ArrayMesh.new()
 	terrain.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	get_node("MoonMesh").mesh = terrain
-	get_node("CollisionShape3D").shape = terrain.create_trimesh_shape()
+	return terrain
 
 
 func _make_craters() -> void:

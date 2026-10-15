@@ -6,8 +6,9 @@
 [ext_resource type="Script" uid="uid://m7v0m3kks34n" path="res://features/ascii/glyph_field.gd" id="4_glyph"]
 [ext_resource type="Shader" uid="uid://d34ycucdi5urf" path="res://features/ascii/ascii_post.gdshader" id="5_post"]
 [ext_resource type="Script" uid="uid://dighlvgsm6n7o" path="res://features/moon_walk/glyph_controls.gd" id="6_controls"]
-
-[ext_resource type="Script" path="res://features/moon_walk/moon_terrain.gd" id="7_terrain"]
+[ext_resource type="Script" uid="uid://b3yclmdr2whqd" path="res://features/moon_walk/moon_terrain.gd" id="7_terrain"]
+[ext_resource type="ArrayMesh" path="res://features/moon_walk/models/moon_craters.res" id="8_moon_model"]
+[ext_resource type="Shape3D" path="res://features/moon_walk/models/moon_craters_collision.res" id="9_moon_collision"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -35,18 +36,9 @@ emission_energy_multiplier = 2.0
 radius = 8.0
 height = 16.0
 
-[sub_resource type="SphereShape3D" id="Shape_moon"]
-radius = 48.0
-
 [sub_resource type="StandardMaterial3D" id="Mat_moon"]
 albedo_color = Color(0.45, 0.5, 0.58, 1)
 roughness = 0.95
-
-[sub_resource type="SphereMesh" id="Mesh_moon"]
-radius = 48.0
-height = 96.0
-radial_segments = 96
-rings = 64
 
 [sub_resource type="CapsuleShape3D" id="Shape_player"]
 radius = 0.35
@@ -81,12 +73,12 @@ seed = 21
 tint = Color(0.28, 0.55, 0.95, 1)
 
 [node name="SunHost" type="MeshInstance3D" parent="SkyPivot" unique_id=1562244100]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 181.61935, 93.493935, 37.57309)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.39663696, 162.74939, -213.45445)
 material_override = SubResource("Mat_sun")
 mesh = SubResource("Mesh_sun")
 
 [node name="SunLight" type="DirectionalLight3D" parent="SkyPivot" unique_id=1380835367]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 181, 93, 37)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22271729, 162.25545, -214.02754)
 light_color = Color(0.82, 0.88, 1, 1)
 light_energy = 4.635
 
@@ -94,11 +86,11 @@ light_energy = 4.635
 script = ExtResource("7_terrain")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Moon" unique_id=4344280]
-shape = SubResource("Shape_moon")
+shape = ExtResource("9_moon_collision")
 
 [node name="MoonMesh" type="MeshInstance3D" parent="Moon" unique_id=60990136]
 material_override = SubResource("Mat_moon")
-mesh = SubResource("Mesh_moon")
+mesh = ExtResource("8_moon_model")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="Moon/MoonMesh" unique_id=2055741752]
 script = ExtResource("4_glyph")

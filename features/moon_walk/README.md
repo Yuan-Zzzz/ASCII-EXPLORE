@@ -32,6 +32,16 @@ godot --path . --headless --script res://tools/smoke_moon_walk.gd
 
 ## 陨石坑地形
 
-月面由固定种子的程序化地形生成，包含大小不同的碗状坑底与环形隆起坑缘。出生点沿默认视角向前走，就能进入直径约 16 米的主坑。网格、ASCII 字符采样和碰撞使用同一份地形，玩家可以走进坑底再走上坑缘。
+月面直接使用已烘焙保存的陨石坑网格模型，包含大小不同的碗状坑底与环形隆起坑缘。出生点沿默认视角向前走，就能进入直径约 16 米的主坑。网格、ASCII 字符采样和碰撞使用同一份地形，玩家可以走进坑底再走上坑缘。
 
-`features/moon_walk/moon_terrain.gd` 的 `radius`、`terrain_seed`、`crater_count` 分别控制月球半径、陨石坑分布种子和随机坑候选数量；主坑始终保留。地形在字符采样前生成，密度与字号控件继续生效。
+`features/moon_walk/moon_terrain.gd` 的 `radius`、`terrain_seed`、`crater_count` 分别控制月球半径、陨石坑分布种子和随机坑候选数量；主坑始终保留。修改参数后执行 `godot --headless --path . --script res://tools/bake_moon_model.gd` 重新烘焙。运行时不再变形或生成模型，密度与字号控件继续生效。
+
+模型保存在 `features/moon_walk/models/moon_craters.res`，对应碰撞体为 `moon_craters_collision.res`。场景直接引用这两个资源，在编辑器中即可查看坑底与坑缘。
+
+## 编辑器 3D ASCII 预览
+
+打开 `scenes/moon_walk.tscn`，在 Godot 的 3D 视口即可看到月球和地球的字符效果，无需运行游戏。若场景已打开，首次更新脚本后重新打开场景。选中 `Moon/MoonMesh/GlyphField`，在检查器修改 `Spacing`（越小越密）、`Glyph Px`、`Tint` 或 `Ambient` 即可更新预览；密度、种子或模型修改后等待约 0.25 秒重新采样。转动 `SkyPivot/SunLight` 可预览光照变化。
+
+字符大小按各个 3D 视口的实际尺寸计算，支持拆分视图。编辑器预览不捕获鼠标或启用角色移动，使用 Godot 原有的视口导航。背景实体保留遮挡，避免背面的字符穿透显示。
+
+编辑器模式检查：`godot --headless --editor --path . --script res://tools/test_editor_preview.gd`。
