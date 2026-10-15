@@ -1,0 +1,145 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://features/moon_walk/moon_walk_root.gd" id="1_root"]
+[ext_resource type="Script" path="res://features/moon_walk/moon_fps_controller.gd" id="2_player"]
+[ext_resource type="Resource" path="res://features/ascii/ascii_ramp.tres" id="3_ramp"]
+[ext_resource type="Script" path="res://features/ascii/glyph_field.gd" id="4_glyph"]
+[ext_resource type="Shader" path="res://features/ascii/ascii_post.gdshader" id="5_post"]
+
+[sub_resource type="Environment" id="Environment_world"]
+background_mode = 1
+background_color = Color(0.01, 0.012, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.35, 0.42, 0.55, 1)
+ambient_light_energy = 0.08
+
+[sub_resource type="StandardMaterial3D" id="Mat_moon"]
+albedo_color = Color(0.45, 0.5, 0.58, 1)
+roughness = 0.95
+
+[sub_resource type="SphereMesh" id="Mesh_moon"]
+radius = 48.0
+height = 96.0
+radial_segments = 96
+rings = 64
+
+[sub_resource type="SphereShape3D" id="Shape_moon"]
+radius = 48.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_earth"]
+albedo_color = Color(0.25, 0.45, 0.85, 1)
+roughness = 0.55
+
+[sub_resource type="SphereMesh" id="Mesh_earth"]
+radius = 18.0
+height = 36.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_sun"]
+albedo_color = Color(1, 0.8, 0.45, 1)
+roughness = 0.35
+emission_enabled = true
+emission = Color(1, 0.65, 0.25, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="SphereMesh" id="Mesh_sun"]
+radius = 8.0
+height = 16.0
+
+[sub_resource type="CapsuleShape3D" id="Shape_player"]
+radius = 0.35
+height = 1.7
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ascii"]
+shader = ExtResource("5_post")
+shader_parameter/u_char_count = 10
+shader_parameter/u_glyph_px = 12.0
+shader_parameter/u_mono = 0.0
+shader_parameter/u_mono_color = Vector3(0.62, 0.74, 0.86)
+shader_parameter/u_bg_color = Vector3(0.01, 0.012, 0.02)
+
+[node name="MoonWalk" type="Node3D"]
+script = ExtResource("1_root")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_world")
+
+[node name="SkyPivot" type="Node3D" parent="."]
+
+[node name="Earth" type="MeshInstance3D" parent="SkyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -420, 260, 620)
+material_override = SubResource("Mat_earth")
+mesh = SubResource("Mesh_earth")
+
+[node name="GlyphField" type="MultiMeshInstance3D" parent="SkyPivot/Earth"]
+script = ExtResource("4_glyph")
+ramp = ExtResource("3_ramp")
+spacing = 0.8
+seed = 21
+glyph_px = 12.0
+tint = Color(0.28, 0.55, 0.95, 1)
+rebuild_on_ready = true
+
+[node name="SunHost" type="MeshInstance3D" parent="SkyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 510, -90, -480)
+material_override = SubResource("Mat_sun")
+mesh = SubResource("Mesh_sun")
+
+[node name="SunLight" type="DirectionalLight3D" parent="SkyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 510, -90, -480)
+light_color = Color(0.82, 0.88, 1, 1)
+light_energy = 1.15
+shadow_enabled = false
+
+[node name="Moon" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Moon"]
+shape = SubResource("Shape_moon")
+
+[node name="MoonMesh" type="MeshInstance3D" parent="Moon"]
+material_override = SubResource("Mat_moon")
+mesh = SubResource("Mesh_moon")
+
+[node name="GlyphField" type="MultiMeshInstance3D" parent="Moon/MoonMesh"]
+script = ExtResource("4_glyph")
+ramp = ExtResource("3_ramp")
+spacing = 1.1
+seed = 48
+glyph_px = 12.0
+tint = Color(0.62, 0.72, 0.84, 1)
+rebuild_on_ready = true
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 49.5, 0)
+script = ExtResource("2_player")
+moon_body_path = NodePath("../Moon")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+shape = SubResource("Shape_player")
+
+[node name="Camera3D" type="Camera3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+current = true
+fov = 70.0
+far = 2500.0
+
+[node name="AsciiLayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="AsciiOverlay" type="ColorRect" parent="AsciiLayer"]
+visible = false
+material = SubResource("ShaderMaterial_ascii")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Hint" type="Label" parent="AsciiLayer"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 720.0
+offset_bottom = 48.0
+theme_override_colors/font_color = Color(0.62, 0.74, 0.86, 0.9)
+theme_override_font_sizes/font_size = 16
+text = "WASD move · mouse look · Space jump · Esc"
