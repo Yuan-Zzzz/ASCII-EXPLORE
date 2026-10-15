@@ -40,14 +40,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _collect_glyph_fields() -> void:
 	_glyph_fields.clear()
-	for host in [moon_mesh, earth, sun_host]:
+	for host in [moon_mesh, earth]:
 		for child in host.get_children():
 			if child.get_script() == GlyphFieldScript:
 				_glyph_fields.append(child)
 
 
 func _apply_depth_hosts() -> void:
-	for host in [moon_mesh, earth, sun_host]:
+	# Keep the sun emissive. Depth shell is only for glyph hosts.
+	for host in [moon_mesh, earth]:
 		var depth := StandardMaterial3D.new()
 		depth.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		depth.albedo_color = Color(0.01, 0.012, 0.02)

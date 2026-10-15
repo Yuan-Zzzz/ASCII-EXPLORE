@@ -84,15 +84,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 510, -90, -480)
 material_override = SubResource("Mat_sun")
 mesh = SubResource("Mesh_sun")
 
-[node name="GlyphField" type="MultiMeshInstance3D" parent="SkyPivot/SunHost"]
-script = ExtResource("4_glyph")
-ramp = ExtResource("3_ramp")
-spacing = 0.55
-seed = 31
-glyph_px = 12.0
-tint = Color(1, 0.72, 0.38, 1)
-rebuild_on_ready = true
-
 [node name="SunLight" type="DirectionalLight3D" parent="SkyPivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 510, -90, -480)
 light_color = Color(0.82, 0.88, 1, 1)
