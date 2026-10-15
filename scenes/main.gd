@@ -1,4 +1,3 @@
-@tool
 extends Node3D
 
 ## 三种显示：3D字符点(MultiMesh) / 原始模型 / 全屏后处理ASCII
@@ -10,15 +9,7 @@ enum ViewMode { GLYPHS, RAW, POST }
 @export var ramp: AsciiRamp
 @export var glyph_px: float = 16.0
 @export var mono: bool = false
-@export var view_mode: ViewMode = ViewMode.GLYPHS:
-	set(value):
-		if view_mode == value:
-			return
-		view_mode = value
-		if is_inside_tree():
-			apply_glyphs_presentation()
-			if not Engine.is_editor_hint():
-				_refresh_hint()
+@export var view_mode: ViewMode = ViewMode.GLYPHS
 
 @onready var overlay: ColorRect = $AsciiLayer/AsciiOverlay
 @onready var hint: Label = $AsciiLayer/Hint
@@ -41,17 +32,11 @@ func _ready() -> void:
 	if ramp == null:
 		ramp = load("res://features/ascii/ascii_ramp.tres") as AsciiRamp
 
-	_build_glyph_fields()
-	if Engine.is_editor_hint():
-		if overlay:
-			_post_mat = overlay.material as ShaderMaterial
-		apply_glyphs_presentation()
-		return
-
 	_post_mat = overlay.material as ShaderMaterial
+	_build_glyph_fields()
 	_apply_post_params()
 	_update_camera()
-	apply_glyphs_presentation()
+	_apply_view_mode()
 	_refresh_hint()
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
@@ -67,26 +52,7 @@ func _ready() -> void:
 		get_tree().quit()
 
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_EDITOR_PRE_SAVE:
-		# 深度壳是运行时/预览覆盖，不能写进 tscn。
-		_set_mesh_depth_only(false)
-	elif what == NOTIFICATION_EDITOR_POST_SAVE:
-		apply_glyphs_presentation()
-
-
-func apply_glyphs_presentation() -> void:
-	if _glyph_fields.is_empty():
-		_build_glyph_fields()
-	_apply_view_mode()
-	_sync_light_to_glyphs()
-
-
 func _process(delta: float) -> void:
-	if Engine.is_editor_hint():
-		_sync_light_to_glyphs()
-		_on_viewport_resized()
-		return
 	if pivot and Input.is_key_pressed(KEY_SPACE):
 		pivot.rotate_y(delta * 0.35)
 	_sync_light_to_glyphs()
@@ -94,8 +60,6 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if Engine.is_editor_hint():
-		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
@@ -116,6 +80,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_apply_mono()
 			KEY_T:
 				view_mode = ((int(view_mode) + 1) % 3) as ViewMode
+				_apply_view_mode()
+				_refresh_hint()
 			KEY_ESCAPE:
 				get_tree().quit()
 
@@ -123,8 +89,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func _build_glyph_fields() -> void:
 	_glyph_fields.clear()
 	for host in [ground, earth, sun_ball]:
-		if host == null:
-			continue
 		_append_glyph_field(host)
 
 
@@ -139,8 +103,7 @@ func _apply_view_mode() -> void:
 	var post_on := view_mode == ViewMode.POST
 	var raw := view_mode == ViewMode.RAW
 
-	if overlay:
-		overlay.visible = post_on
+	overlay.visible = post_on
 	for f in _glyph_fields:
 		if is_instance_valid(f):
 			f.visible = glyphs_on
@@ -151,8 +114,6 @@ func _apply_view_mode() -> void:
 
 func _set_mesh_depth_only(on: bool) -> void:
 	for mi in [ground, earth, sun_ball]:
-		if mi == null:
-			continue
 		if on:
 			if not _saved_overrides.has(mi):
 				_saved_overrides[mi] = mi.material_override
@@ -191,8 +152,6 @@ func _set_glyph_px(px: float) -> void:
 
 func _sync_light_to_glyphs() -> void:
 	# DirectionalLight 光线沿本地 -Z 射出；Lambert 要用「指向光源」的方向 = +Z
-	if sun == null:
-		return
 	var dir: Vector3 = sun.global_transform.basis.z
 	for f in _glyph_fields:
 		if is_instance_valid(f):
@@ -206,8 +165,6 @@ func _on_viewport_resized() -> void:
 
 
 func _refresh_hint() -> void:
-	if hint == null:
-		return
 	var names := ["3D字符点", "原始模型", "全屏后处理"]
 	var mode_name: String = names[int(view_mode)]
 	hint.text = "ASCII GlyphField  [%s]\n拖拽旋转 · 滚轮字号 · 空格慢转 · T 切换模式 · C 单色 · Esc 退出" % mode_name
