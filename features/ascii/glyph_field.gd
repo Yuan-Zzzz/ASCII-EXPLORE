@@ -10,6 +10,7 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 @export var glyph_px: float = 12.0
 @export var tint: Color = Color(0.85, 0.9, 1.0)
 @export var light_dir: Vector3 = Vector3(0.4, 0.8, 0.3)
+@export var ambient: float = 0.35
 @export var rebuild_on_ready: bool = true
 
 var _shader_mat: ShaderMaterial
@@ -78,6 +79,7 @@ func _apply_params() -> void:
 	_shader_mat.set_shader_parameter("u_glyph_px", glyph_px)
 	_shader_mat.set_shader_parameter("u_tint", Vector3(tint.r, tint.g, tint.b))
 	_shader_mat.set_shader_parameter("u_light_dir", light_dir.normalized())
+	_shader_mat.set_shader_parameter("u_ambient", ambient)
 	var vp := get_viewport()
 	if vp:
 		var sz := vp.get_visible_rect().size
@@ -99,6 +101,12 @@ func set_light_dir(dir: Vector3) -> void:
 	light_dir = dir
 	if _shader_mat:
 		_shader_mat.set_shader_parameter("u_light_dir", light_dir.normalized())
+
+
+func set_ambient(amount: float) -> void:
+	ambient = amount
+	if _shader_mat:
+		_shader_mat.set_shader_parameter("u_ambient", ambient)
 
 
 func sync_viewport_size() -> void:
