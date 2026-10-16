@@ -11,6 +11,8 @@
 [ext_resource type="Script" uid="uid://b3yclmdr2whqd" path="res://features/moon_walk/moon_terrain.gd" id="7_terrain"]
 [ext_resource type="ArrayMesh" path="res://features/moon_walk/models/moon_craters.res" id="8_moon_model"]
 [ext_resource type="Shape3D" path="res://features/moon_walk/models/moon_craters_collision.res" id="9_moon_collision"]
+[ext_resource type="Script" path="res://features/moon_walk/black_hole.gd" id="10_blackhole"]
+[ext_resource type="Script" path="res://features/moon_walk/black_hole_optics.gd" id="11_optics"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -96,6 +98,18 @@ shader_parameter/u_mono = 0.0
 shader_parameter/u_mono_color = Vector3(0.62, 0.74, 0.86)
 shader_parameter/u_bg_color = Vector3(0.01, 0.012, 0.02)
 
+[sub_resource type="Resource" id="Resource_black_hole_optics"]
+script = ExtResource("11_optics")
+rs = 4.0
+disk_inner_rs = 3.0
+disk_outer_rs = 7.0
+inclination = 0.75
+node_longitude = 0.35
+emissivity_exponent = 1.2
+emissivity_peak = 6.0
+photon_ring_width_rs = 0.22
+photon_ring_gain = 4.0
+
 [node name="MoonWalk" type="Node3D" unique_id=1458876948]
 script = ExtResource("1_root")
 dither_pixel_size = 1.0
@@ -150,6 +164,11 @@ transform = Transform3D(-0.99999946, 0.0006286588, -0.0008292503, 0, 0.7968891, 
 light_color = Color(0.82, 0.88, 1, 1)
 shadow_enabled = true
 directional_shadow_max_distance = 600.0
+
+[node name="BlackHole" type="Node3D" parent="SkyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 168, 72, -96)
+script = ExtResource("10_blackhole")
+optics = SubResource("Resource_black_hole_optics")
 
 [node name="Moon" type="StaticBody3D" parent="." unique_id=1950569615]
 script = ExtResource("7_terrain")
