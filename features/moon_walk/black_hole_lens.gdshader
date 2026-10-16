@@ -1,0 +1,216 @@
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_always, cull_disabled, specular_disabled, shadows_disabled;
+
+uniform sampler2D screen_texture : hint_screen_texture, filter_linear, repeat_disable;
+
+uniform float u_rs;
+uniform float u_b_crit;
+uniform float u_disk_inner;
+uniform float u_disk_outer;
+uniform vec3 u_disk_normal;
+uniform float u_emissivity_exponent;
+uniform float u_emissivity_peak;
+uniform float u_photon_sigma;
+uniform float u_photon_gain;
+uniform vec4 u_color_inner;
+uniform vec4 u_color_outer;
+uniform float u_lens_radius;
+uniform float u_max_radius_over_distance;
+uniform float u_apodize_start;
+uniform float u_bozza_offset;
+uniform float u_impact_eps;
+
+// Matches BlackHoleOptics.ANNULUS_EPS. Ray normalization misses an exact inner edge by a few ulps.
+const float ANNULUS_EPS = 0.001;
+
+varying vec3 v_world;
+varying vec3 v_center;
+varying float v_radius;
+
+float deflection_angle(float b) {
+	if (b <= u_b_crit) {
+		return 0.0;
+	}
+	float weak = 2.0 * u_rs / b;
+	float x = max(b / u_b_crit - 1.0, u_impact_eps);
+	float strong = -log(x) + u_bozza_offset;
+	return max(weak, strong);
+}
+
+float apodized_deflection(float b, float radius) {
+	float raw = deflection_angle(b);
+	if (radius <= 0.0) {
+		return 0.0;
+	}
+	float t = smoothstep(u_apodize_start * radius, radius, b);
+	return raw * (1.0 - t);
+}
+
+float sample_scale(float psi_app, float alpha) {
+	if (psi_app <= 0.0001) {
+		return 1.0;
+	}
+	float psi_src = psi_app - min(alpha, 2.0 * psi_app);
+	return psi_src / psi_app;
+}
+
+vec3 rotate_toward(vec3 dir, vec3 toward, float angle) {
+	vec3 axis = cross(dir, toward);
+	if (dot(axis, axis) < 1e-8) {
+		return dir;
+	}
+	axis = normalize(axis);
+	float cosine = cos(angle);
+	float sine = sin(angle);
+	return dir * cosine + cross(axis, dir) * sine + axis * dot(axis, dir) * (1.0 - cosine);
+}
+
+float redshift_g(float radius, float los) {
+	float mass = u_rs * 0.5;
+	float beta = sqrt(mass / (radius - 2.0 * mass));
+	float grav = sqrt(1.0 - 3.0 * mass / radius);
+	return grav / (1.0 - beta * clamp(los, -1.0, 1.0));
+}
+
+float orbital_los(vec3 point, vec3 center, vec3 camera) {
+	vec3 radial = point - center;
+	radial -= u_disk_normal * dot(radial, u_disk_normal);
+	if (dot(radial, radial) < 1e-8) {
+		return 0.0;
+	}
+	vec3 v_hat = normalize(cross(u_disk_normal, radial));
+	return dot(v_hat, normalize(camera - point));
+}
+
+float ring_los(vec3 b_vec) {
+	if (dot(b_vec, b_vec) < 1e-8) {
+		return 0.0;
+	}
+	vec3 tangent = cross(u_disk_normal, vec3(0.0, 1.0, 0.0));
+	if (dot(tangent, tangent) < 1e-6) {
+		tangent = cross(u_disk_normal, vec3(1.0, 0.0, 0.0));
+	}
+	return dot(normalize(tangent), normalize(b_vec));
+}
+
+bool disk_hit(vec3 origin, vec3 dir, vec3 center, out vec3 point, out float radius) {
+	float denom = dot(dir, u_disk_normal);
+	if (abs(denom) < 0.0001) {
+		return false;
+	}
+	float t = dot(center - origin, u_disk_normal) / denom;
+	if (t <= 0.0) {
+		return false;
+	}
+	point = origin + t * dir;
+	radius = length(point - center);
+	if (radius < u_disk_inner - ANNULUS_EPS || radius > u_disk_outer + ANNULUS_EPS) {
+		return false;
+	}
+	return true;
+}
+
+bool clears_horizon(vec3 camera, vec3 point, vec3 center) {
+	vec3 seg = point - camera;
+	if (dot(seg, seg) < 1e-8) {
+		return length(camera - center) >= u_rs;
+	}
+	float t = clamp(dot(center - camera, seg) / dot(seg, seg), 0.0, 1.0);
+	return length(mix(camera, point, t) - center) >= u_rs;
+}
+
+vec3 disk_color(float radius, float g_shift) {
+	float span = u_disk_outer - u_disk_inner;
+	float t = clamp((radius - u_disk_inner) / span, 0.0, 1.0);
+	float energy = u_emissivity_peak * pow(u_disk_inner / radius, u_emissivity_exponent) * pow(g_shift, 4.0);
+	return mix(u_color_inner.rgb, u_color_outer.rgb, t) * energy;
+}
+
+void vertex() {
+	vec3 center_world = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	float dist = length(CAMERA_POSITION_WORLD - center_world);
+	float radius = min(u_lens_radius, u_max_radius_over_distance * dist);
+	vec3 forward = vec3(0.0, 0.0, 1.0);
+	if (dist > 0.0001) {
+		forward = (CAMERA_POSITION_WORLD - center_world) / dist;
+	}
+	vec3 right = cross(vec3(0.0, 1.0, 0.0), forward);
+	if (dot(right, right) < 1e-6) {
+		right = cross(vec3(1.0, 0.0, 0.0), forward);
+	}
+	right = normalize(right);
+	vec3 up = normalize(cross(forward, right));
+	mat3 to_model = inverse(mat3(MODEL_MATRIX));
+	VERTEX = (to_model * right) * VERTEX.x * radius + (to_model * up) * VERTEX.y * radius;
+	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	v_center = center_world;
+	v_radius = radius;
+}
+
+void fragment() {
+	vec4 clip = PROJECTION_MATRIX * VIEW_MATRIX * vec4(v_center, 1.0);
+	if (clip.w <= 0.0) {
+		discard;
+	}
+	vec3 dir = normalize(v_world - CAMERA_POSITION_WORLD);
+	vec3 to_center = v_center - CAMERA_POSITION_WORLD;
+	float t_ca = dot(to_center, dir);
+	vec3 closest = CAMERA_POSITION_WORLD + t_ca * dir;
+	vec3 b_vec = closest - v_center;
+	float b = length(b_vec);
+	if (b > v_radius) {
+		discard;
+	}
+	float alpha = apodized_deflection(b, v_radius);
+	float dist = max(length(to_center), 0.0001);
+	float psi_app = acos(clamp(dot(dir, to_center / dist), -1.0, 1.0));
+	float scale = sample_scale(psi_app, alpha);
+
+	bool have_disk = false;
+	float best_dist = 1.0e20;
+	vec3 best_point = vec3(0.0);
+	float best_radius = 0.0;
+	vec3 hit_point;
+	float hit_radius;
+	if (disk_hit(CAMERA_POSITION_WORLD, dir, v_center, hit_point, hit_radius) && clears_horizon(CAMERA_POSITION_WORLD, hit_point, v_center)) {
+		have_disk = true;
+		best_dist = length(hit_point - CAMERA_POSITION_WORLD);
+		best_point = hit_point;
+		best_radius = hit_radius;
+	}
+	if (b > u_b_crit && dot(b_vec, b_vec) > 1e-8) {
+		vec3 turned = rotate_toward(dir, -normalize(b_vec), min(deflection_angle(b), PI));
+		if (disk_hit(closest, turned, v_center, hit_point, hit_radius)) {
+			float egress_dist = length(hit_point - CAMERA_POSITION_WORLD);
+			if (!have_disk || egress_dist < best_dist) {
+				have_disk = true;
+				best_point = hit_point;
+				best_radius = hit_radius;
+			}
+		}
+	}
+	if (have_disk) {
+		float g_shift = redshift_g(best_radius, orbital_los(best_point, v_center, CAMERA_POSITION_WORLD));
+		ALBEDO = disk_color(best_radius, g_shift);
+		ALPHA = 1.0;
+	} else if (b <= u_b_crit) {
+		ALBEDO = vec3(0.0);
+		ALPHA = 1.0;
+	} else {
+		vec2 ndc = clip.xy / clip.w;
+		vec2 bh_uv = ndc * 0.5 + 0.5;
+		// SCREEN_UV x covers a wider angle than y, so the radial scale is applied in isotropic pixels.
+		float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
+		vec2 delta = SCREEN_UV - bh_uv;
+		delta.x *= aspect;
+		vec2 src = delta * scale;
+		src.x /= aspect;
+		vec3 background = texture(screen_texture, bh_uv + src).rgb;
+		float los = ring_los(b_vec);
+		float g_shift = redshift_g(u_disk_inner, los);
+		float falloff = exp(-pow((b - u_b_crit) / max(u_photon_sigma, 0.0001), 2.0));
+		float ring = u_photon_gain * u_emissivity_peak * pow(g_shift, 4.0) * falloff;
+		ALBEDO = background + u_color_inner.rgb * ring;
+		ALPHA = 1.0;
+	}
+}
