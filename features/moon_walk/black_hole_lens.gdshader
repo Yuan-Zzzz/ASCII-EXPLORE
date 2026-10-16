@@ -20,8 +20,25 @@ uniform float u_apodize_start;
 uniform float u_bozza_offset;
 uniform float u_impact_eps;
 
-// Matches BlackHoleOptics.ANNULUS_EPS. Ray normalization misses an exact inner edge by a few ulps.
+// Runtime presentation (not part of BlackHoleOptics.uniform_block).
+uniform float u_time = 0.0;
+uniform float u_disk_phase = 0.0;
+uniform sampler2D u_atlas : source_color, filter_nearest, repeat_disable;
+uniform int u_char_count = 10;
+uniform float u_glyph_px = 12.0;
+uniform float u_ascii = 1.0;
+uniform float u_dither = 1.0;
+uniform float u_dither_pixel_size = 1.0;
+uniform float u_dither_color_levels = 4.0;
+uniform vec3 u_ascii_bg = vec3(0.01, 0.012, 0.02);
+
 const float ANNULUS_EPS = 0.001;
+const float BAYER_4X4[16] = float[16](
+	0.0, 8.0, 2.0, 10.0,
+	12.0, 4.0, 14.0, 6.0,
+	3.0, 11.0, 1.0, 9.0,
+	15.0, 7.0, 13.0, 5.0
+);
 
 varying vec3 v_world;
 varying vec3 v_center;
@@ -72,12 +89,28 @@ float redshift_g(float radius, float los) {
 	return grav / (1.0 - beta * clamp(los, -1.0, 1.0));
 }
 
+vec3 spin_basis_x(vec3 normal) {
+	vec3 tangent = cross(normal, vec3(0.0, 1.0, 0.0));
+	if (dot(tangent, tangent) < 1e-6) {
+		tangent = cross(normal, vec3(1.0, 0.0, 0.0));
+	}
+	return normalize(tangent);
+}
+
+vec3 rotate_around_normal(vec3 v, vec3 normal, float angle) {
+	vec3 axis = normalize(normal);
+	float c = cos(angle);
+	float s = sin(angle);
+	return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
 float orbital_los(vec3 point, vec3 center, vec3 camera) {
 	vec3 radial = point - center;
 	radial -= u_disk_normal * dot(radial, u_disk_normal);
 	if (dot(radial, radial) < 1e-8) {
 		return 0.0;
 	}
+	radial = rotate_around_normal(radial, u_disk_normal, u_disk_phase);
 	vec3 v_hat = normalize(cross(u_disk_normal, radial));
 	return dot(v_hat, normalize(camera - point));
 }
@@ -86,10 +119,8 @@ float ring_los(vec3 b_vec) {
 	if (dot(b_vec, b_vec) < 1e-8) {
 		return 0.0;
 	}
-	vec3 tangent = cross(u_disk_normal, vec3(0.0, 1.0, 0.0));
-	if (dot(tangent, tangent) < 1e-6) {
-		tangent = cross(u_disk_normal, vec3(1.0, 0.0, 0.0));
-	}
+	vec3 tangent = spin_basis_x(u_disk_normal);
+	tangent = rotate_around_normal(tangent, u_disk_normal, u_disk_phase);
 	return dot(normalize(tangent), normalize(b_vec));
 }
 
@@ -119,11 +150,57 @@ bool clears_horizon(vec3 camera, vec3 point, vec3 center) {
 	return length(mix(camera, point, t) - center) >= u_rs;
 }
 
-vec3 disk_color(float radius, float g_shift) {
+float disk_swirl(vec3 point, vec3 center, float radius) {
+	vec3 radial = point - center;
+	radial -= u_disk_normal * dot(radial, u_disk_normal);
+	if (dot(radial, radial) < 1e-8) {
+		return 1.0;
+	}
+	radial = rotate_around_normal(radial, u_disk_normal, u_disk_phase);
+	vec3 bx = spin_basis_x(u_disk_normal);
+	vec3 by = cross(u_disk_normal, bx);
+	float az = atan(dot(radial, by), dot(radial, bx));
+	float arms = 0.55 + 0.45 * sin(az * 3.0 - u_time * 2.4 + log(max(radius, 0.2)) * 5.0);
+	float flicker = 0.85 + 0.15 * sin(u_time * 7.0 + az * 11.0);
+	return arms * flicker;
+}
+
+vec3 disk_color(vec3 point, vec3 center, float radius, float g_shift) {
 	float span = u_disk_outer - u_disk_inner;
 	float t = clamp((radius - u_disk_inner) / span, 0.0, 1.0);
 	float energy = u_emissivity_peak * pow(u_disk_inner / radius, u_emissivity_exponent) * pow(g_shift, 4.0);
+	energy *= disk_swirl(point, center, radius);
 	return mix(u_color_inner.rgb, u_color_outer.rgb, t) * energy;
+}
+
+vec3 apply_ascii(vec3 col, vec2 frag_xy) {
+	float cell = max(u_glyph_px, 4.0);
+	vec2 local = fract(frag_xy / cell);
+	float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+	// Keep the event horizon empty (space glyph) while bright disk/ring pick dense marks.
+	int n = max(u_char_count, 1);
+	int idx = clamp(int(lum * float(n)), 0, n - 1);
+	float du = 1.0 / float(n);
+	vec2 atlas_uv = vec2((float(idx) + local.x) * du, local.y);
+	float mask = textureLod(u_atlas, atlas_uv, 0.0).r;
+	return mix(u_ascii_bg, col, step(0.28, mask));
+}
+
+vec3 apply_bayer(vec3 col, vec2 frag_xy) {
+	ivec2 cell = ivec2(mod(floor(frag_xy / max(u_dither_pixel_size, 1.0)), 4.0));
+	float threshold = (BAYER_4X4[cell.y * 4 + cell.x] + 0.5) / 16.0;
+	float steps = max(floor(u_dither_color_levels + 0.5) - 1.0, 1.0);
+	return clamp(floor(clamp(col, 0.0, 1.0) * steps + threshold) / steps, 0.0, 1.0);
+}
+
+vec3 present(vec3 col, vec2 frag_xy) {
+	if (u_ascii > 0.5) {
+		col = apply_ascii(col, frag_xy);
+	}
+	if (u_dither > 0.5) {
+		col = apply_bayer(col, frag_xy);
+	}
+	return col;
 }
 
 void vertex() {
@@ -189,17 +266,16 @@ void fragment() {
 			}
 		}
 	}
+
+	vec3 col;
 	if (have_disk) {
 		float g_shift = redshift_g(best_radius, orbital_los(best_point, v_center, CAMERA_POSITION_WORLD));
-		ALBEDO = disk_color(best_radius, g_shift);
-		ALPHA = 1.0;
+		col = disk_color(best_point, v_center, best_radius, g_shift);
 	} else if (b <= u_b_crit) {
-		ALBEDO = vec3(0.0);
-		ALPHA = 1.0;
+		col = vec3(0.0);
 	} else {
 		vec2 ndc = clip.xy / clip.w;
 		vec2 bh_uv = ndc * 0.5 + 0.5;
-		// SCREEN_UV x covers a wider angle than y, so the radial scale is applied in isotropic pixels.
 		float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
 		vec2 delta = SCREEN_UV - bh_uv;
 		delta.x *= aspect;
@@ -210,7 +286,10 @@ void fragment() {
 		float g_shift = redshift_g(u_disk_inner, los);
 		float falloff = exp(-pow((b - u_b_crit) / max(u_photon_sigma, 0.0001), 2.0));
 		float ring = u_photon_gain * u_emissivity_peak * pow(g_shift, 4.0) * falloff;
-		ALBEDO = background + u_color_inner.rgb * ring;
-		ALPHA = 1.0;
+		float pulse = 0.92 + 0.08 * sin(u_time * 5.0 + b * 3.0);
+		col = background + u_color_inner.rgb * ring * pulse;
 	}
+
+	ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
+	ALPHA = 1.0;
 }

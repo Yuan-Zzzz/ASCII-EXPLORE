@@ -76,9 +76,43 @@ func _scene_contract() -> bool:
 	for key in block:
 		if not listed.has(String(key)):
 			return _fail("shader missing %s" % key)
+	var allowed := {}
+	for key in block:
+		allowed[String(key)] = true
+	for key in BlackHoleScript.PRESENTATION_KEYS:
+		allowed[String(key)] = true
 	for uname in listed:
-		if String(uname).begins_with("u_") and not block.has(String(uname)):
+		if String(uname).begins_with("u_") and not allowed.has(String(uname)):
 			return _fail("extra shader uniform %s" % uname)
+
+	main.surface_render_mode = 2
+	await process_frame
+	if not is_equal_approx(float(mat.get_shader_parameter("u_ascii")), 1.0):
+		return _fail("ASCII+Bayer mode should enable u_ascii")
+	if not is_equal_approx(float(mat.get_shader_parameter("u_dither")), 1.0):
+		return _fail("ASCII+Bayer mode should enable u_dither")
+	if mat.get_shader_parameter("u_atlas") == null:
+		return _fail("missing ASCII atlas on lens")
+
+	main.surface_render_mode = 0
+	await process_frame
+	if not is_equal_approx(float(mat.get_shader_parameter("u_dither")), 0.0):
+		return _fail("ASCII 3D mode should disable dither")
+
+	main.surface_render_mode = 1
+	await process_frame
+	if not is_equal_approx(float(mat.get_shader_parameter("u_ascii")), 0.0):
+		return _fail("Bayer Model mode should disable ascii glyphs")
+
+	main.surface_render_mode = 2
+	var phase0: float = float(mat.get_shader_parameter("u_disk_phase"))
+	bh.animate = true
+	bh.spin_speed = 2.0
+	for _i in 12:
+		await process_frame
+	var phase1: float = float(mat.get_shader_parameter("u_disk_phase"))
+	if is_equal_approx(phase0, phase1):
+		return _fail("disk phase did not advance")
 
 	var cam := main.get_node("Player/Camera3D") as Camera3D
 	cam.look_at(bh.global_position, Vector3.UP)
