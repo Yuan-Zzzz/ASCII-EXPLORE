@@ -13,12 +13,17 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 @export var glyph_px: float = 12.0
 @export var tint: Color = Color(0.85, 0.9, 1.0)
 @export var light_dir: Vector3 = Vector3(0.4, 0.8, 0.3)
-@export var ambient: float = 0.35
+@export var ambient: float = 0.35 # Legacy scene compatibility; use WorldEnvironment.
+@export var emission_energy: float = 0.0
+@export var dither_enabled: bool = false
+@export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
+@export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
 @export var rebuild_on_ready: bool = true:
 	set(value):
 		rebuild_on_ready = value
 		notify_property_list_changed()
 
+var _dither_mat: ShaderMaterial
 var _shader_mat: ShaderMaterial
 var _preview_mesh: Mesh
 var _preview_signature: Array = []
@@ -187,18 +192,31 @@ func _apply_params() -> void:
 	_shader_mat.set_shader_parameter("u_char_count", ramp.char_count)
 	_shader_mat.set_shader_parameter("u_glyph_px", glyph_px)
 	_shader_mat.set_shader_parameter("u_tint", Vector3(tint.r, tint.g, tint.b))
-	_shader_mat.set_shader_parameter("u_light_dir", light_dir.normalized())
-	_shader_mat.set_shader_parameter("u_ambient", ambient)
+	_shader_mat.set_shader_parameter("u_emission_energy", emission_energy)
 	var vp := get_viewport()
 	if vp:
 		var sz := vp.get_visible_rect().size
 		_shader_mat.set_shader_parameter("u_viewport_size", sz)
+
+	if dither_enabled:
+		if _dither_mat == null:
+			_dither_mat = ShaderMaterial.new()
+			_dither_mat.shader = preload("res://features/ascii/glyph_bayer_overlay.gdshader")
+		for parameter in ["u_atlas", "u_char_count", "u_glyph_px", "u_depth_pull"]:
+			_dither_mat.set_shader_parameter(parameter, _shader_mat.get_shader_parameter(parameter))
+		_dither_mat.set_shader_parameter("u_dither_pixel_size", dither_pixel_size)
+		_dither_mat.set_shader_parameter("u_dither_color_levels", dither_color_levels)
+		material_overlay = _dither_mat
+	else:
+		material_overlay = null
 
 
 func set_glyph_px(px: float) -> void:
 	glyph_px = px
 	if _shader_mat:
 		_shader_mat.set_shader_parameter("u_glyph_px", glyph_px)
+	if _dither_mat:
+		_dither_mat.set_shader_parameter("u_glyph_px", glyph_px)
 
 
 func set_mono(on: bool) -> void:
@@ -209,13 +227,13 @@ func set_mono(on: bool) -> void:
 func set_light_dir(dir: Vector3) -> void:
 	light_dir = dir
 	if _shader_mat:
-		_shader_mat.set_shader_parameter("u_light_dir", light_dir.normalized())
+		_shader_mat.set_shader_parameter("u_emission_energy", emission_energy)
 
 
 func set_ambient(amount: float) -> void:
 	ambient = amount
 	if _shader_mat:
-		_shader_mat.set_shader_parameter("u_ambient", ambient)
+		_shader_mat.set_shader_parameter("u_emission_energy", emission_energy)
 
 
 func sync_viewport_size() -> void:

@@ -40,8 +40,24 @@ godot --path . --headless --script res://tools/smoke_moon_walk.gd
 
 ## 编辑器 3D ASCII 预览
 
-打开 `scenes/moon_walk.tscn`，在 Godot 的 3D 视口即可看到月球和地球的字符效果，无需运行游戏。若场景已打开，首次更新脚本后重新打开场景。选中 `Moon/MoonMesh/GlyphField`，在检查器修改 `Spacing`（越小越密）、`Glyph Px`、`Tint` 或 `Ambient` 即可更新预览；密度、种子或模型修改后等待约 0.25 秒重新采样。转动 `SkyPivot/SunLight` 可预览光照变化。
+打开 `scenes/moon_walk.tscn`，在 Godot 的 3D 视口即可看到月球和地球的字符效果，无需运行游戏。若场景已打开，首次更新脚本后重新打开场景。选中 `Moon/MoonMesh/GlyphField`，在检查器修改 `Spacing`（越小越密）、`Glyph Px`、`Tint` 即可更新预览；密度、种子或模型修改后等待约 0.25 秒重新采样。转动 `SkyPivot/SunLight` 可预览光照变化。
 
 字符大小按各个 3D 视口的实际尺寸计算，支持拆分视图。编辑器预览不捕获鼠标或启用角色移动，使用 Godot 原有的视口导航。背景实体保留遮挡，避免背面的字符穿透显示。
 
 编辑器模式检查：`godot --headless --editor --path . --script res://tools/test_editor_preview.gd`。
+
+## 模型表面 ASCII 与拜耳抖动
+
+根节点 `MoonWalk` 的 `Surface Render Mode` 默认使用 `ASCII + Bayer`：在模型表面生成 3D 字符，使用模型表面法线接受 Godot 原生光照，再用相同 billboard 顶点与图集裁切范围的覆盖材质量化字符颜色。字符以外不绘制抖动，保留模型遮挡，背景与 UI 不受影响，不挂载全屏后处理。
+
+- `ASCII 3D`：单独显示原生光照字符。
+- `Bayer Model`：完整网格的拜耳抖动。
+- `ASCII + Bayer`：字符与拜耳抖动结合，默认模式。
+- `Dither Pixel Size`：网点大小，默认 2 像素。
+- `Dither Color Levels`：每个通道的色阶数，默认 4，越低抖动越明显。
+
+字符密度与字号滑块在两个 ASCII 模式中生效；编辑器预览和运行时同步生效。独立 GlyphField 可通过 Dither Enabled 开启；挂载式 AsciiEffect3D 也提供相同参数。
+
+ASCII 3D 模式的字符使用采样表面法线参与 Godot 原生光照，字符形状由种子选择，字符颜色随灯光变化。模型负责投射阴影，字符本身不投射阴影。
+
+原生光照像素回归：使用图形渲染器执行 `godot --path . --script res://tools/test_native_lighting.gd`，逐一关闭/开启原生方向光并比较三种模式的实际像素亮度。此测试需要 GPU，不使用 --headless。

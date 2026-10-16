@@ -7,6 +7,9 @@ extends Node3D
 const Field = preload("res://features/ascii/glyph_field.gd")
 
 @export var enabled: bool = true
+@export var dither_enabled: bool = true
+@export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
+@export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
 @export_range(1.0, 64.0, 0.5) var glyph_px: float = 12.0
 @export_range(0.01, 16.0, 0.01) var density: float = 1.0
 @export_range(0.05, 10.0, 0.01) var base_spacing: float = 0.35
@@ -70,6 +73,9 @@ func _process(delta: float) -> void:
 		field.tint = tint
 		field.light_dir = light_dir
 		field.ambient = ambient
+		field.dither_enabled = dither_enabled
+		field.dither_pixel_size = dither_pixel_size
+		field.dither_color_levels = dither_color_levels
 		field._apply_params()
 		host.material_override = _depth if field.visible else entry.material
 

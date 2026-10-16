@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_opaque, specular_disabled;
+render_mode diffuse_lambert, cull_disabled, depth_draw_opaque, specular_disabled;
 
 /// 3D 字符点 billboard：固定屏幕像素大小（透视正确）
 /// INSTANCE_CUSTOM = (nx, ny, nz, seed)
@@ -9,12 +9,13 @@ uniform int u_char_count = 10;
 uniform float u_glyph_px = 16.0;
 uniform vec2 u_viewport_size = vec2(1280.0, 720.0);
 uniform float u_depth_pull = 0.04;
-uniform vec3 u_light_dir = vec3(0.4, 0.8, 0.3);
+uniform float u_emission_energy = 0.0;
 uniform vec3 u_tint = vec3(0.85, 0.9, 1.0);
-uniform float u_ambient = 0.35;
+
 uniform float u_mono = 0.0;
 uniform vec3 u_mono_color = vec3(0.78, 0.92, 1.0);
 
+varying vec3 v_surface_normal;
 varying vec2 v_local;
 varying flat float v_idx;
 varying flat vec3 v_color;
@@ -24,9 +25,10 @@ void vertex() {
 	if (length(INSTANCE_CUSTOM.xyz) < 0.01) {
 		nrm = vec3(0.0, 1.0, 0.0);
 	}
+	v_surface_normal = normalize(mat3(VIEW_MATRIX) * nrm);
 	float seed = INSTANCE_CUSTOM.w;
-	float moon = max(dot(nrm, normalize(u_light_dir)), 0.0);
-	float lum = clamp(u_ambient + moon * 0.7 + (seed - 0.5) * 0.04, 0.0, 0.999);
+	// Glyph choice is decorative; Godot computes the illumination.
+	float lum = mix(0.35, 0.999, seed);
 	int nchars = max(u_char_count, 1);
 	int idx = int(lum * float(nchars));
 	idx = clamp(idx, 0, nchars - 1);
@@ -52,9 +54,13 @@ void vertex() {
 
 	clip.xy = ndc * w;
 	POSITION = clip;
+	// Lighting position is the sampled surface point, not a quad corner.
+	VERTEX = vec3(0.0);
 }
 
 void fragment() {
+	NORMAL = normalize(v_surface_normal);
+	ROUGHNESS = 1.0;
 	int nchars = max(u_char_count, 1);
 	float du = 1.0 / float(nchars);
 	vec2 atlas_uv = vec2((v_idx + v_local.x) * du, v_local.y);
@@ -63,5 +69,5 @@ void fragment() {
 		discard;
 	}
 	ALBEDO = v_color * smoothstep(0.28, 0.75, mask);
-	ALPHA = 1.0;
+	EMISSION = ALBEDO * u_emission_energy;
 }
