@@ -103,12 +103,12 @@ script = ExtResource("11_optics")
 rs = 4.0
 disk_inner_rs = 3.0
 disk_outer_rs = 7.0
-inclination = 1.15
-node_longitude = 0.0
-emissivity_exponent = 2.0
-emissivity_peak = 2.0
-photon_ring_width_rs = 0.12
-photon_ring_gain = 1.5
+inclination = 0.75
+node_longitude = 0.35
+emissivity_exponent = 1.2
+emissivity_peak = 6.0
+photon_ring_width_rs = 0.22
+photon_ring_gain = 4.0
 
 [node name="MoonWalk" type="Node3D" unique_id=1458876948]
 script = ExtResource("1_root")

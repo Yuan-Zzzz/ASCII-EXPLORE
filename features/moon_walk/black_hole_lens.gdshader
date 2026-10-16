@@ -160,30 +160,55 @@ float disk_swirl(vec3 point, vec3 center, float radius) {
 	vec3 bx = spin_basis_x(u_disk_normal);
 	vec3 by = cross(u_disk_normal, bx);
 	float az = atan(dot(radial, by), dot(radial, bx));
-	float arms = 0.55 + 0.45 * sin(az * 3.0 - u_time * 2.4 + log(max(radius, 0.2)) * 5.0);
-	float flicker = 0.85 + 0.15 * sin(u_time * 7.0 + az * 11.0);
+	// Floor stays high so ASCII still sees a disk between spiral arms.
+	float arms = 0.72 + 0.28 * sin(az * 2.0 - u_time * 1.6 + log(max(radius, 0.2)) * 4.0);
+	float flicker = 0.9 + 0.1 * sin(u_time * 5.0 + az * 9.0);
 	return arms * flicker;
 }
 
 vec3 disk_color(vec3 point, vec3 center, float radius, float g_shift) {
-	float span = u_disk_outer - u_disk_inner;
+	float span = max(u_disk_outer - u_disk_inner, 0.001);
 	float t = clamp((radius - u_disk_inner) / span, 0.0, 1.0);
-	float energy = u_emissivity_peak * pow(u_disk_inner / radius, u_emissivity_exponent) * pow(g_shift, 4.0);
+	float radial = pow(u_disk_inner / max(radius, u_disk_inner), u_emissivity_exponent);
+	float g4 = pow(max(g_shift, 0.15), 4.0);
+	float energy = u_emissivity_peak * mix(0.35, 1.0, radial) * mix(0.45, 1.6, clamp(g4, 0.0, 2.0));
 	energy *= disk_swirl(point, center, radius);
 	return mix(u_color_inner.rgb, u_color_outer.rgb, t) * energy;
 }
 
+float hash21(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+// Procedural stars in lensed UV space so an empty WorldEnvironment still shows deflection.
+vec3 starfield(vec2 uv) {
+	vec2 cell = floor(uv * 110.0);
+	float n = hash21(cell);
+	float keep = step(0.992, n);
+	float spark = pow(hash21(cell + 19.7), 10.0);
+	float twinkle = 0.65 + 0.35 * sin(u_time * 6.0 + n * 40.0);
+	return vec3(0.72, 0.84, 1.0) * keep * spark * twinkle * 3.2;
+}
+
 vec3 apply_ascii(vec3 col, vec2 frag_xy) {
+	float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+	// Event horizon stays pure black; do not lift it to the near-black shell color.
+	if (lum < 0.02) {
+		return vec3(0.0);
+	}
 	float cell = max(u_glyph_px, 4.0);
 	vec2 local = fract(frag_xy / cell);
-	float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
-	// Keep the event horizon empty (space glyph) while bright disk/ring pick dense marks.
 	int n = max(u_char_count, 1);
 	int idx = clamp(int(lum * float(n)), 0, n - 1);
+	if (idx == 0) {
+		idx = 1;
+	}
 	float du = 1.0 / float(n);
 	vec2 atlas_uv = vec2((float(idx) + local.x) * du, local.y);
 	float mask = textureLod(u_atlas, atlas_uv, 0.0).r;
-	return mix(u_ascii_bg, col, step(0.28, mask));
+	// Between glyphs keep space black so the silhouette and lensed stars read.
+	// Keep a colored floor so the disk stays a disk; glyphs only texture it.
+	return mix(col * 0.42, col, step(0.18, mask));
 }
 
 vec3 apply_bayer(vec3 col, vec2 frag_xy) {
@@ -194,11 +219,17 @@ vec3 apply_bayer(vec3 col, vec2 frag_xy) {
 }
 
 vec3 present(vec3 col, vec2 frag_xy) {
-	if (u_ascii > 0.5) {
-		col = apply_ascii(col, frag_xy);
+	float lum = dot(col, vec3(0.299, 0.587, 0.114));
+	if (lum < 0.012) {
+		return vec3(0.0);
 	}
+	// Keep the disk inside the display range so Bayer and glyphs still see it.
+	col = col / (vec3(1.0) + col);
 	if (u_dither > 0.5) {
 		col = apply_bayer(col, frag_xy);
+	}
+	if (u_ascii > 0.5) {
+		col = apply_ascii(col, frag_xy);
 	}
 	return col;
 }
@@ -281,13 +312,18 @@ void fragment() {
 		delta.x *= aspect;
 		vec2 src = delta * scale;
 		src.x /= aspect;
-		vec3 background = texture(screen_texture, bh_uv + src).rgb;
+		vec2 sample_uv = clamp(bh_uv + src, vec2(0.001), vec2(0.999));
+		vec3 background = texture(screen_texture, sample_uv).rgb;
+		// Empty near-black sky: inject stars in the deflected UV so lensing is visible.
+		float sky_lum = dot(background, vec3(0.299, 0.587, 0.114));
+		vec2 star_uv = (delta * scale) * 0.55 + vec2(u_disk_phase * 0.02, u_time * 0.01);
+		background += starfield(star_uv) * mix(1.0, 0.25, smoothstep(0.02, 0.12, sky_lum));
 		float los = ring_los(b_vec);
 		float g_shift = redshift_g(u_disk_inner, los);
 		float falloff = exp(-pow((b - u_b_crit) / max(u_photon_sigma, 0.0001), 2.0));
 		float ring = u_photon_gain * u_emissivity_peak * pow(g_shift, 4.0) * falloff;
-		float pulse = 0.92 + 0.08 * sin(u_time * 5.0 + b * 3.0);
-		col = background + u_color_inner.rgb * ring * pulse;
+		float pulse = 0.85 + 0.15 * sin(u_time * 5.0 + b * 3.0);
+		col = background + u_color_inner.rgb * ring * pulse * 1.35;
 	}
 
 	ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);

@@ -27,7 +27,7 @@ const PRESENTATION_KEYS := [
 @export var ramp: AsciiRamp
 @export var animate: bool = true
 @export_range(0.0, 4.0, 0.01) var spin_speed: float = 0.55
-@export var glyph_px: float = 12.0
+@export var glyph_px: float = 14.0
 
 var _lens_material: ShaderMaterial
 var _disk_phase: float = 0.0
