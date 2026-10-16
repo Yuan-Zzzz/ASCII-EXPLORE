@@ -94,7 +94,8 @@ func _add(host: MeshInstance3D) -> void:
 	var field := Field.new()
 	field.name = "_AsciiGlyphs"
 	field.rebuild_on_ready = false
-	field.set_process(false)
+	# 字形节点负责后台任务轮询和合并重建。
+	field.set_process(true)
 	var mesh := host.mesh
 	if mesh != null:
 		mesh.changed.connect(_mesh_changed.bind(host))

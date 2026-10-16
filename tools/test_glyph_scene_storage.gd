@@ -14,6 +14,8 @@ func _run() -> void:
 	var counts: Array[int] = []
 	for path in paths:
 		var field := scene.get_node(path) as GlyphField
+		while field._preview_dirty or field._preview_thread != null:
+			await process_frame
 		assert(field.multimesh != null and field.multimesh.instance_count > 0)
 		counts.append(field.multimesh.instance_count)
 	var saved := PackedScene.new()
@@ -31,6 +33,8 @@ func _run() -> void:
 	await process_frame
 	for i in paths.size():
 		var field := reloaded.get_node(paths[i]) as GlyphField
+		while field._preview_dirty or field._preview_thread != null:
+			await process_frame
 		assert(field.multimesh.instance_count == counts[i], "Reload must regenerate identical glyphs")
 	var baked := scene.get_node(paths[0]) as GlyphField
 	baked.rebuild_on_ready = false

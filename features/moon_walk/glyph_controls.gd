@@ -44,6 +44,7 @@ func _ready() -> void:
 	_timer.timeout.connect(_apply_density)
 	_density.value_changed.connect(_queue_density)
 	size_slider.value_changed.connect(_set_glyph_size)
+	_field.rebuilt.connect(_update_density_label.bind(false))
 	_set_glyph_size(size_slider.value)
 	_update_density_label(false)
 
@@ -68,7 +69,7 @@ func _apply_density() -> void:
 	# Surface sample count scales approximately with 1 / spacing squared.
 	_field.spacing = _base_spacing / sqrt(_density.value)
 	_field.rebuild()
-	_update_density_label(false)
+	_update_density_label(true)
 
 
 func _set_glyph_size(value: float) -> void:

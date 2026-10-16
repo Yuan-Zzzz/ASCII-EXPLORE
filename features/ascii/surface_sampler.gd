@@ -6,11 +6,15 @@ extends RefCounted
 
 static func sample_mesh(mesh: Mesh, spacing: float = 0.35, seed: int = 1) -> Dictionary:
 	## 返回 { "positions": PackedVector3Array, "normals": PackedVector3Array }
+	return sample_arrays(_mesh_arrays(mesh), spacing, seed)
+
+
+# 后台任务只接收主线程快照，不访问 Mesh 或场景树。
+static func sample_arrays(arrays: Array, spacing: float, seed: int) -> Dictionary:
 	spacing = maxf(spacing, 0.05)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 
-	var arrays := _mesh_arrays(mesh)
 	if arrays.is_empty():
 		return {"positions": PackedVector3Array(), "normals": PackedVector3Array()}
 

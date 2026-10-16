@@ -19,7 +19,7 @@ func _run() -> void:
 	var effect := Effect.new()
 	model.add_child(effect)
 	await process_frame
-	await create_timer(0.4).timeout
+	await create_timer(0.8).timeout
 	assert(effect._entries.size() == 2)
 	var fa: GlyphField = effect._entries[a].field
 	var fb: GlyphField = effect._entries[b].field
@@ -33,7 +33,7 @@ func _run() -> void:
 	await process_frame
 	effect.glyph_px = 21.0
 	effect.density = 4.0
-	await create_timer(0.5).timeout
+	await create_timer(0.8).timeout
 	assert(fa.multimesh.instance_count > count)
 	assert(fa.material_override != second._entries[other].field.material_override)
 	assert(fa.material_override.get_shader_parameter("u_glyph_px") == 21.0)

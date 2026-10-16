@@ -12,17 +12,20 @@ func _run() -> void:
 	root.add_child(scene)
 	await process_frame
 	var field := scene.get_node("Moon/MoonMesh/GlyphField") as GlyphField
+	await _settle(field)
 	assert(field.multimesh != null and field.multimesh.instance_count > 3000, "Editor must generate moon glyphs")
 	# 使用明确的有效间距，避免场景中的美术调参影响预览测试。
 	field.spacing = 1.1
-	await create_timer(0.6).timeout
+	await create_timer(0.3).timeout
+	await _settle(field)
 	var initial := field.multimesh.instance_count
 	var earth := scene.get_node("SkyPivot/Earth/GlyphField") as GlyphField
 	assert(earth.multimesh != null and earth.multimesh.instance_count > 50)
 	var depth := scene.get_node("Moon/MoonMesh").material_override as StandardMaterial3D
 	assert(depth.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED)
 	field.spacing *= 1.5
-	await create_timer(0.6).timeout
+	await create_timer(0.3).timeout
+	await _settle(field)
 	assert(field.multimesh.instance_count < initial, "Inspector spacing must rebuild preview")
 	field.glyph_px = 9.0
 	field.tint = Color(0.8, 0.6, 0.4)
@@ -40,3 +43,10 @@ func _run() -> void:
 	print("EDITOR_PREVIEW_OK moon=%d earth=%d" % [field.multimesh.instance_count, earth.multimesh.instance_count])
 	scene.free()
 	quit(0)
+
+
+func _settle(field: GlyphField) -> void:
+	var deadline := Time.get_ticks_msec() + 15000
+	while field._preview_dirty or field._preview_thread != null:
+		assert(Time.get_ticks_msec() < deadline, "Preview task timed out")
+		await process_frame
