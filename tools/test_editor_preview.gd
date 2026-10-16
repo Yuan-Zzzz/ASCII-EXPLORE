@@ -13,6 +13,9 @@ func _run() -> void:
 	await process_frame
 	var field := scene.get_node("Moon/MoonMesh/GlyphField") as GlyphField
 	assert(field.multimesh != null and field.multimesh.instance_count > 3000, "Editor must generate moon glyphs")
+	# 使用明确的有效间距，避免场景中的美术调参影响预览测试。
+	field.spacing = 1.1
+	await create_timer(0.6).timeout
 	var initial := field.multimesh.instance_count
 	var earth := scene.get_node("SkyPivot/Earth/GlyphField") as GlyphField
 	assert(earth.multimesh != null and earth.multimesh.instance_count > 50)

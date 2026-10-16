@@ -12,13 +12,22 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 @export var tint: Color = Color(0.85, 0.9, 1.0)
 @export var light_dir: Vector3 = Vector3(0.4, 0.8, 0.3)
 @export var ambient: float = 0.35
-@export var rebuild_on_ready: bool = true
+@export var rebuild_on_ready: bool = true:
+	set(value):
+		rebuild_on_ready = value
+		notify_property_list_changed()
 
 var _shader_mat: ShaderMaterial
 var _preview_mesh: Mesh
 var _preview_signature: Array = []
 var _preview_wait: float = 0.0
 var _preview_dirty: bool = false
+
+
+# 自动重建的预览资源不写入场景；手动烘焙模式仍保留资源。
+func _validate_property(property: Dictionary) -> void:
+	if rebuild_on_ready and property.name in [&"multimesh", &"material_override"]:
+		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
 
 
 func _ready() -> void:
