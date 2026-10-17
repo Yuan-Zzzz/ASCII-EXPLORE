@@ -3,5 +3,16 @@
 # Runtime capture from --shot (not source)
 ascii_shot.png
 ascii_shot.png.import
+# Shot tools under tools/ write these captures (not source)
+bh_shot*.png
+bh_shot*.png.import
+sky_bh*.png
+sky_bh*.png.import
+moon_shot*.png
+moon_shot*.png.import
+moon_lit*.png
+moon_lit*.png.import
+lab_*.png
+lab_*.png.import
 # Local decision trail (figure-it-out / show-me-your-work)
 .audit/
