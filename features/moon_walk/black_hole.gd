@@ -21,6 +21,7 @@ const PRESENTATION_KEYS := [
 	"u_dither_pixel_size",
 	"u_dither_color_levels",
 	"u_ascii_bg",
+	"u_glow_energy",
 ]
 
 @export var optics: BlackHoleOptics
@@ -28,6 +29,8 @@ const PRESENTATION_KEYS := [
 @export var animate: bool = true
 @export_range(0.0, 4.0, 0.01) var spin_speed: float = 0.55
 @export var glyph_px: float = 14.0
+## 吸积盘与光子环的 HDR 辉光强度。事件视界内始终为 0，不参与发光。
+@export_range(0.0, 2.0, 0.01) var glow_energy: float = 0.18
 
 var _lens_material: ShaderMaterial
 var _disk_phase: float = 0.0
@@ -137,6 +140,7 @@ func _apply_presentation() -> void:
 	_lens_material.set_shader_parameter("u_dither_pixel_size", dither_px)
 	_lens_material.set_shader_parameter("u_dither_color_levels", dither_levels)
 	_lens_material.set_shader_parameter("u_glyph_px", glyph_px)
+	_lens_material.set_shader_parameter("u_glow_energy", glow_energy)
 	_lens_material.set_shader_parameter("u_ascii_bg", Vector3(0.01, 0.012, 0.02))
 	if ramp != null and ramp.atlas != null:
 		_lens_material.set_shader_parameter("u_atlas", ramp.atlas)

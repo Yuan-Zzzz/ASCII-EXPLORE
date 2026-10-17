@@ -65,8 +65,26 @@ func _run() -> void:
 	if sun_mat == null or not sun_mat.emission_enabled:
 		_fail("sun missing emissive material")
 		return
-	if _field(main, ^"SkyPivot/SunHost") == null:
+	# 太阳必须用 HDR 自发光核心，才能在环境辉光里亮起来。
+	if sun_mat.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
+		_fail("sun core must be unshaded")
+		return
+	if sun_mat.albedo_color.r <= 1.0:
+		_fail("sun core is not HDR: %s" % sun_mat.albedo_color)
+		return
+	var sun_field := _field(main, ^"SkyPivot/SunHost")
+	if sun_field == null:
 		_fail("sun glyph field missing")
+		return
+	if sun_field.emission_energy <= 0.0:
+		_fail("sun glyph emission missing")
+		return
+	if sun_host.get_node_or_null("Corona") == null:
+		_fail("sun corona missing")
+		return
+	var world_env := main.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_env == null or not world_env.environment.glow_enabled:
+		_fail("world glow disabled")
 		return
 
 	var moon_field := _field(main, ^"Moon/MoonMesh")

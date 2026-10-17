@@ -52,7 +52,7 @@ godot --path . --headless --script res://tools/test_orbital_motion.gd
 godot --path . --headless --script res://tools/smoke_moon_walk.gd
 ```
 
-脚本实例化月球场景，检查坑底凹陷、隆起坑缘、射线碰撞、出生点站立、坑底站立、月球与地球字符场及光照同步。
+脚本实例化月球场景，检查坑底凹陷、隆起坑缘、射线碰撞、出生点站立、坑底站立、太阳 HDR 自发光与日冕、月球与地球字符场及光照同步。
 
 ## 实时字符调整
 
@@ -68,7 +68,7 @@ godot --path . --headless --script res://tools/smoke_moon_walk.gd
 
 ## 编辑器 3D ASCII 预览
 
-打开 `scenes/moon_walk.tscn`，在 Godot 的 3D 视口即可看到月球和地球的字符效果，无需运行游戏。若场景已打开，首次更新脚本后重新打开场景。选中 `Moon/MoonMesh/GlyphField`，在检查器修改 `Spacing`（越小越密）、`Glyph Px`、`Tint` 即可更新预览；密度、种子或模型修改后等待约 0.25 秒重新采样。转动 `SkyPivot/SunLight` 可预览光照变化。
+打开 `scenes/moon_walk.tscn`，在 Godot 的 3D 视口即可看到月球和地球的字符效果，无需运行游戏。若场景已打开，首次更新脚本后重新打开场景。选中 `Moon/MoonMesh/GlyphField`，在检查器修改 `Spacing`（越小越密）、`Glyph Px`、`Tint` 即可更新预览；密度、种子或模型修改后等待约 0.25 秒重新采样。转动 `SkyPivot/SunHost/SunLight` 可预览光照变化。
 
 字符大小按各个 3D 视口的实际尺寸计算，支持拆分视图。编辑器预览不捕获鼠标或启用角色移动，使用 Godot 原有的视口导航。背景实体保留遮挡，避免背面的字符穿透显示。
 
@@ -89,3 +89,13 @@ godot --path . --headless --script res://tools/smoke_moon_walk.gd
 ASCII 3D 模式的字符使用采样表面法线参与 Godot 原生光照，字符形状由种子选择，字符颜色随灯光变化。模型负责投射阴影，字符本身不投射阴影。
 
 原生光照像素回归：使用图形渲染器执行 `godot --path . --script res://tools/test_native_lighting.gd`，逐一关闭/开启原生方向光并比较三种模式的实际像素亮度。此测试需要 GPU，不使用 --headless。
+
+## 太阳辉光与黑洞发光
+
+太阳本体使用 HDR 自发光底色，字符层保留在表面。`MoonWalk` 的 `Sun Core Energy` 控制日面亮度，`Sun Glyph Emission` 控制字符层自发光。太阳的字符层不再叠加 Bayer 覆盖层，因为覆盖层会用字符后面的暗底把日面涂黑。
+
+`SkyPivot/SunHost/Corona` 是一片始终面向摄像机的加色辉光面，平面位于日心，被太阳前半球遮挡，所以在轮廓外形成日冕。颜色、能量、衰减和角向流纹在 `features/moon_walk/sun_corona.gdshader` 以及 `Corona` 节点的材质参数里调整。
+
+黑洞本身不发光。`black_hole_lens.gdshader` 的 `accretion_glow()` 只在 `b > b_crit`（事件视界之外）返回辉光，光源是吸积盘和光子环；亮度沿用与吸积盘相同的多普勒增亮和引力红移 `g^4`，因此接近侧辉光更亮，远离侧更暗。`BlackHole` 节点的 `Glow Energy` 控制强度，设为 0 可关闭。
+
+`WorldEnvironment` 开启了 HDR 阈值 1.0 的环境辉光：只有超过 1 的太阳核心、日冕、黑洞光子环会产生 bloom，月面和地球的普通字符不会被整体提亮。

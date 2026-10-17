@@ -69,6 +69,10 @@ func _scene_contract() -> bool:
 	for key in block:
 		if not _same(snap[key], block[key]):
 			return _fail("snapshot %s" % key)
+	if not is_equal_approx(float(mat.get_shader_parameter("u_glow_energy")), bh.glow_energy):
+		return _fail("glow energy not uploaded")
+	if bh.glow_energy <= 0.0:
+		return _fail("glow energy must be positive")
 
 	var listed := {}
 	for item in mat.shader.get_shader_uniform_list():

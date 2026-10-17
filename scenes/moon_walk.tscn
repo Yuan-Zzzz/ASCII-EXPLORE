@@ -14,6 +14,7 @@
 [ext_resource type="Script" uid="uid://ceihmllgjxvcf" path="res://features/moon_walk/black_hole.gd" id="10_blackhole"]
 [ext_resource type="Script" uid="uid://buyo05e0cpupp" path="res://features/moon_walk/black_hole_optics.gd" id="11_optics"]
 [ext_resource type="Script" uid="uid://b701686lqntxs" path="res://features/moon_walk/orbital_motion.gd" id="12_orbits"]
+[ext_resource type="Shader" path="res://features/moon_walk/sun_corona.gdshader" id="13_corona"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -21,6 +22,17 @@ background_color = Color(0.01, 0.012, 0.02, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.35, 0.42, 0.55, 1)
 ambient_light_energy = 0.08
+glow_enabled = true
+glow_intensity = 0.8
+glow_strength = 1.0
+glow_bloom = 0.0
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+glow_levels/1 = 1.0
+glow_levels/2 = 0.8
+glow_levels/3 = 0.5
+glow_levels/4 = 0.25
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6ffas"]
 shading_mode = 0
@@ -52,6 +64,17 @@ albedo_color = Color(0.01, 0.012, 0.02, 1)
 [sub_resource type="SphereMesh" id="Mesh_sun"]
 radius = 8.0
 height = 16.0
+
+[sub_resource type="QuadMesh" id="QuadMesh_corona"]
+size = Vector2(2, 2)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_corona"]
+shader = ExtResource("13_corona")
+shader_parameter/u_color = Vector3(1, 0.64, 0.24)
+shader_parameter/u_energy = 2.2
+shader_parameter/u_core_width = 0.22
+shader_parameter/u_tail_power = 2.4
+shader_parameter/u_ray_strength = 0.12
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_p71e7"]
 render_priority = 0
@@ -156,6 +179,12 @@ ambient = 5.425
 emission_energy = 1.0
 dither_enabled = true
 dither_pixel_size = 1.0
+
+[node name="Corona" type="MeshInstance3D" parent="SkyPivot/SunHost"]
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 0, 0, 0)
+cast_shadow = 0
+material_override = SubResource("ShaderMaterial_corona")
+mesh = SubResource("QuadMesh_corona")
 
 [node name="SunLight" type="DirectionalLight3D" parent="SkyPivot/SunHost" unique_id=1380835367]
 transform = Transform3D(-0.99999946, 0.00062865886, -0.0008292504, 0, 0.7968891, 0.6041256, 0.0010406094, 0.6041253, -0.7968887, -0.61935425, -0.49394226, -0.5730896)

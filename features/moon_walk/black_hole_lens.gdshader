@@ -31,6 +31,7 @@ uniform float u_dither = 1.0;
 uniform float u_dither_pixel_size = 1.0;
 uniform float u_dither_color_levels = 4.0;
 uniform vec3 u_ascii_bg = vec3(0.01, 0.012, 0.02);
+uniform float u_glow_energy = 0.18;
 
 const float ANNULUS_EPS = 0.001;
 const float BAYER_4X4[16] = float[16](
@@ -218,6 +219,23 @@ vec3 apply_bayer(vec3 col, vec2 frag_xy) {
 	return clamp(floor(clamp(col, 0.0, 1.0) * steps + threshold) / steps, 0.0, 1.0);
 }
 
+// 黑洞本身不发光：辉光只来自吸积盘和光子环。
+// b <= b_crit 时返回 0，事件视界保持纯黑；外侧按光子环高斯衰减，
+// 并用与盘相同的多普勒 + 引力红移 g^4 调制亮度（接近侧更亮）。
+vec3 accretion_glow(float b, vec3 b_vec) {
+	if (b <= u_b_crit) {
+		return vec3(0.0);
+	}
+	float outside = b - u_b_crit;
+	float ring_halo = exp(-pow(outside / max(u_b_crit * 1.15, 0.001), 2.0));
+	float outer_halo = exp(-pow(outside / max(u_b_crit * 3.2, 0.001), 2.0));
+	float los = ring_los(b_vec);
+	float g_shift = redshift_g(u_disk_inner, los);
+	float beaming = pow(max(g_shift, 0.2), 4.0);
+	float shape = ring_halo + 0.18 * outer_halo;
+	return u_color_inner.rgb * u_emissivity_peak * beaming * shape;
+}
+
 vec3 present(vec3 col, vec2 frag_xy) {
 	float lum = dot(col, vec3(0.299, 0.587, 0.114));
 	if (lum < 0.012) {
@@ -326,6 +344,6 @@ void fragment() {
 		col = background + u_color_inner.rgb * ring * pulse * 1.35;
 	}
 
-	ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
+	ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE) + accretion_glow(b, b_vec) * u_glow_energy;
 	ALPHA = 1.0;
 }
