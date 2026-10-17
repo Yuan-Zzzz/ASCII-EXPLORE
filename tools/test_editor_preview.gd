@@ -34,7 +34,7 @@ func _run() -> void:
 	var mat := field.material_override as ShaderMaterial
 	assert(is_equal_approx(mat.get_shader_parameter("u_glyph_px"), 9.0))
 	assert(mat.get_shader_parameter("u_tint") == Vector3(0.8, 0.6, 0.4))
-	var sun := scene.get_node("SkyPivot/SunLight") as DirectionalLight3D
+	var sun := scene.get_node("SkyPivot/SunHost/SunLight") as DirectionalLight3D
 	sun.rotate_y(0.5)
 	await process_frame
 	await process_frame

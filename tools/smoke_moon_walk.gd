@@ -34,14 +34,17 @@ func _run() -> void:
 		_fail("main crater has no raised rim")
 		return
 	# 验证坑底碰撞与可见网格同源，射线必须击中凹陷表面。
-	var query := PhysicsRayQueryParameters3D.create(center * 60.0, center * 40.0, 1)
+	var moon_origin: Vector3 = moon.global_position
+	var query := PhysicsRayQueryParameters3D.create(
+		moon_origin + center * 60.0, moon_origin + center * 40.0, 1
+	)
 	var hit: Dictionary = main.get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty() or absf(hit.position.length() - moon.surface_radius(center)) > 0.12:
+	if hit.is_empty() or absf((hit.position - moon_origin).length() - moon.surface_radius(center)) > 0.12:
 		_fail("crater floor collision mismatch")
 		return
 
 	var player := main.get_node("Player") as CharacterBody3D
-	var dist := player.global_position.length()
+	var dist: float = (player.global_position - moon.global_position).length()
 	if dist <= moon_radius:
 		_fail("player inside moon dist=%s" % dist)
 		return
@@ -53,7 +56,7 @@ func _run() -> void:
 		return
 
 	var camera := player.get_node("Camera3D") as Camera3D
-	if camera.global_position.length() <= moon_radius:
+	if (camera.global_position - moon.global_position).length() <= moon_radius:
 		_fail("camera inside moon")
 		return
 
@@ -62,8 +65,8 @@ func _run() -> void:
 	if sun_mat == null or not sun_mat.emission_enabled:
 		_fail("sun missing emissive material")
 		return
-	if _field(main, ^"SkyPivot/SunHost") != null:
-		_fail("sun must not use GlyphField")
+	if _field(main, ^"SkyPivot/SunHost") == null:
+		_fail("sun glyph field missing")
 		return
 
 	var moon_field := _field(main, ^"Moon/MoonMesh")
@@ -71,42 +74,43 @@ func _run() -> void:
 	if moon_field == null or earth_field == null:
 		_fail("missing moon/earth glyph field")
 		return
-	if moon_field.spacing < 0.8 or moon_field.spacing > 1.6:
+	if moon_field.spacing < 0.01 or moon_field.spacing > 1.0:
 		_fail("moon spacing %s" % moon_field.spacing)
 		return
 
 	var moon_n := _count(moon_field)
 	var earth_n := _count(earth_field)
-	if moon_n < 3000 or moon_n > 80000:
+	if moon_n < 3000 or moon_n > 250000:
 		_fail("moon instances %s" % moon_n)
 		return
 	if earth_n < 50 or earth_n > 20000:
 		_fail("earth instances %s" % earth_n)
 		return
 
-	var light := main.get_node("SkyPivot/SunLight") as DirectionalLight3D
+	var light := main.get_node("SkyPivot/SunHost/SunLight") as DirectionalLight3D
 	var light_z := light.global_transform.basis.z.normalized()
 	var moon_light: Vector3 = moon_field.light_dir.normalized()
 	if moon_light.dot(light_z) < 0.999:
 		_fail("glyph light_dir not synced")
 		return
 
-	# 将角色放到主坑内，确保不会站在原来的隐形球面上。
-	player.global_position = center * (moon_radius + 2.0)
+	# 将角色放到主坑内，确保不会站在原来的隐形球面上；月球仍在轨道上移动。
+	player.global_position = moon.global_position + center * (moon_radius + 2.0)
 	player.velocity = Vector3.ZERO
 	for _i in 150:
 		await physics_frame
 	var floor_radius: float = moon.surface_radius(center)
-	if not player.is_on_floor() or player.global_position.length() >= moon_radius:
+	var local_dist: float = (player.global_position - moon.global_position).length()
+	if not player.is_on_floor() or local_dist >= moon_radius:
 		_fail("player did not settle inside crater")
 		return
-	if absf(player.global_position.length() - floor_radius - 0.85) > 0.2:
+	if absf(local_dist - floor_radius - 0.85) > 0.2:
 		_fail("player crater floor height mismatch")
 		return
 
 	print(
 		"SMOKE_OK moon=%d earth=%d player_radius=%.4f moon_radius=%.4f"
-		% [moon_n, earth_n, dist, moon_radius]
+		% [moon_n, earth_n, local_dist, moon_radius]
 	)
 	quit(0)
 

@@ -10,7 +10,7 @@ const ModelDitherShader = preload("res://features/dither/bayer_model.gdshader")
 
 var _active_surface_mode: int = -1
 
-@onready var sun_light: DirectionalLight3D = $SkyPivot/SunLight
+@onready var sun_light: DirectionalLight3D = $SkyPivot/SunHost/SunLight
 @onready var moon_mesh: MeshInstance3D = $Moon/MoonMesh
 @onready var earth: MeshInstance3D = $SkyPivot/Earth
 @onready var sun_host: MeshInstance3D = $SkyPivot/SunHost
@@ -22,7 +22,7 @@ func _ready() -> void:
 	if not Engine.is_editor_hint() and DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	# 平行光沿本地 -Z 射出。
-	sun_light.look_at(Vector3.ZERO, Vector3.UP)
+	sun_light.look_at(moon_mesh.global_position, Vector3.UP)
 	_apply_depth_hosts()
 	_collect_glyph_fields()
 	_sync_light_to_glyphs()
@@ -83,9 +83,15 @@ func _apply_depth_hosts() -> void:
 
 func _sync_light_to_glyphs() -> void:
 	# Native Light3D and WorldEnvironment own all lighting calculations.
+	if sun_light == null:
+		return
+	var light_dir := sun_light.global_basis.z.normalized()
 	for host in [moon_mesh, earth, sun_host]:
 		var field := host.get_node("GlyphField") as GlyphField
 		field.sync_viewport_size()
+		# 轨道运动会让太阳方向持续变化；保留这个只读方向供调试与回归测试使用。
+		if not field.light_dir.is_equal_approx(light_dir):
+			field.light_dir = light_dir
 		field.dither_enabled = surface_render_mode == 2
 		field.dither_pixel_size = dither_pixel_size
 		field.dither_color_levels = dither_color_levels

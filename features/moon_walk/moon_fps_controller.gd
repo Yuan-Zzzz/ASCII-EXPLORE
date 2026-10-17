@@ -21,6 +21,7 @@ class WorldFrame:
 @export var mouse_sensitivity: float = 0.0022
 
 var _frame: WorldFrame
+var _body: Node3D
 var _yaw_delta := 0.0
 var _pitch := 0.0
 
@@ -28,9 +29,9 @@ var _pitch := 0.0
 
 
 func _ready() -> void:
-	var body := get_node(moon_body_path) as StaticBody3D
+	_body = get_node(moon_body_path) as Node3D
 	_frame = WorldFrame.new()
-	_frame.center = body.global_position
+	_frame.center = _body.global_position
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -44,6 +45,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# 月球在星系轨道里移动；当地上方向必须跟着月心更新。
+	if _body != null:
+		_frame.center = _body.global_position
 	var up := _frame.up_at(global_position)
 	_align_up(up)
 	var vertical := velocity.dot(up)

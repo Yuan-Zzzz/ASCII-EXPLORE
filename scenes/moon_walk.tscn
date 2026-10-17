@@ -11,8 +11,9 @@
 [ext_resource type="Script" uid="uid://b3yclmdr2whqd" path="res://features/moon_walk/moon_terrain.gd" id="7_terrain"]
 [ext_resource type="ArrayMesh" path="res://features/moon_walk/models/moon_craters.res" id="8_moon_model"]
 [ext_resource type="Shape3D" path="res://features/moon_walk/models/moon_craters_collision.res" id="9_moon_collision"]
-[ext_resource type="Script" path="res://features/moon_walk/black_hole.gd" id="10_blackhole"]
-[ext_resource type="Script" path="res://features/moon_walk/black_hole_optics.gd" id="11_optics"]
+[ext_resource type="Script" uid="uid://ceihmllgjxvcf" path="res://features/moon_walk/black_hole.gd" id="10_blackhole"]
+[ext_resource type="Script" uid="uid://buyo05e0cpupp" path="res://features/moon_walk/black_hole_optics.gd" id="11_optics"]
+[ext_resource type="Script" uid="uid://b701686lqntxs" path="res://features/moon_walk/orbital_motion.gd" id="12_orbits"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -21,7 +22,7 @@ ambient_light_source = 2
 ambient_light_color = Color(0.35, 0.42, 0.55, 1)
 ambient_light_energy = 0.08
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ojxhs"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6ffas"]
 shading_mode = 0
 albedo_color = Color(0.01, 0.012, 0.02, 1)
 
@@ -29,7 +30,7 @@ albedo_color = Color(0.01, 0.012, 0.02, 1)
 radius = 18.0
 height = 36.0
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_kx83i"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cwcok"]
 render_priority = 0
 shader = ExtResource("2_mfci8")
 shader_parameter/u_dither_pixel_size = 1.0
@@ -44,7 +45,7 @@ shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
 shader_parameter/u_mono = 0.0
 shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6ffas"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dbuiq"]
 shading_mode = 0
 albedo_color = Color(0.01, 0.012, 0.02, 1)
 
@@ -52,7 +53,7 @@ albedo_color = Color(0.01, 0.012, 0.02, 1)
 radius = 8.0
 height = 16.0
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_cwcok"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_p71e7"]
 render_priority = 0
 shader = ExtResource("2_mfci8")
 shader_parameter/u_dither_pixel_size = 1.0
@@ -67,11 +68,20 @@ shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
 shader_parameter/u_mono = 0.0
 shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dbuiq"]
+[sub_resource type="Resource" id="Resource_black_hole_optics"]
+script = ExtResource("11_optics")
+inclination = 0.75
+node_longitude = 0.35
+emissivity_exponent = 1.2
+emissivity_peak = 6.0
+photon_ring_width_rs = 0.22
+photon_ring_gain = 4.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y2bat"]
 shading_mode = 0
 albedo_color = Color(0.01, 0.012, 0.02, 1)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_p71e7"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_uvcm7"]
 render_priority = 0
 shader = ExtResource("2_mfci8")
 shader_parameter/u_dither_pixel_size = 1.0
@@ -98,18 +108,6 @@ shader_parameter/u_mono = 0.0
 shader_parameter/u_mono_color = Vector3(0.62, 0.74, 0.86)
 shader_parameter/u_bg_color = Vector3(0.01, 0.012, 0.02)
 
-[sub_resource type="Resource" id="Resource_black_hole_optics"]
-script = ExtResource("11_optics")
-rs = 4.0
-disk_inner_rs = 3.0
-disk_outer_rs = 7.0
-inclination = 0.75
-node_longitude = 0.35
-emissivity_exponent = 1.2
-emissivity_peak = 6.0
-photon_ring_width_rs = 0.22
-photon_ring_gain = 4.0
-
 [node name="MoonWalk" type="Node3D" unique_id=1458876948]
 script = ExtResource("1_root")
 dither_pixel_size = 1.0
@@ -121,11 +119,11 @@ environment = SubResource("Environment_world")
 
 [node name="Earth" type="MeshInstance3D" parent="SkyPivot" unique_id=1566705265]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -96.85513, 61.495583, 187.74547)
-material_override = SubResource("StandardMaterial3D_ojxhs")
+material_override = SubResource("StandardMaterial3D_6ffas")
 mesh = SubResource("Mesh_earth")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="SkyPivot/Earth" unique_id=597855218]
-material_overlay = SubResource("ShaderMaterial_kx83i")
+material_overlay = SubResource("ShaderMaterial_cwcok")
 cast_shadow = 0
 script = ExtResource("4_glyph")
 ramp = ExtResource("3_ramp")
@@ -140,12 +138,12 @@ dither_pixel_size = 1.0
 
 [node name="SunHost" type="MeshInstance3D" parent="SkyPivot" unique_id=1562244100]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.39663696, 162.74939, -213.45445)
-material_override = SubResource("StandardMaterial3D_6ffas")
+material_override = SubResource("StandardMaterial3D_dbuiq")
 cast_shadow = 0
 mesh = SubResource("Mesh_sun")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="SkyPivot/SunHost" unique_id=838375213]
-material_overlay = SubResource("ShaderMaterial_cwcok")
+material_overlay = SubResource("ShaderMaterial_p71e7")
 cast_shadow = 0
 script = ExtResource("4_glyph")
 ramp = ExtResource("3_ramp")
@@ -159,16 +157,17 @@ emission_energy = 1.0
 dither_enabled = true
 dither_pixel_size = 1.0
 
-[node name="SunLight" type="DirectionalLight3D" parent="SkyPivot" unique_id=1380835367]
-transform = Transform3D(-0.99999946, 0.0006286588, -0.0008292503, 0, 0.7968891, 0.6041256, 0.0010406094, 0.6041253, -0.7968887, -0.22271729, 162.25545, -214.02754)
+[node name="SunLight" type="DirectionalLight3D" parent="SkyPivot/SunHost" unique_id=1380835367]
+transform = Transform3D(-0.99999946, 0.00062865886, -0.0008292504, 0, 0.7968891, 0.6041256, 0.0010406094, 0.6041253, -0.7968887, -0.61935425, -0.49394226, -0.5730896)
 light_color = Color(0.82, 0.88, 1, 1)
 shadow_enabled = true
 directional_shadow_max_distance = 600.0
 
-[node name="BlackHole" type="Node3D" parent="SkyPivot"]
+[node name="BlackHole" type="Node3D" parent="SkyPivot" unique_id=1313701991]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 168, 72, -96)
 script = ExtResource("10_blackhole")
 optics = SubResource("Resource_black_hole_optics")
+ramp = ExtResource("3_ramp")
 
 [node name="Moon" type="StaticBody3D" parent="." unique_id=1950569615]
 script = ExtResource("7_terrain")
@@ -178,11 +177,11 @@ visible = false
 shape = ExtResource("9_moon_collision")
 
 [node name="MoonMesh" type="MeshInstance3D" parent="Moon" unique_id=60990136]
-material_override = SubResource("StandardMaterial3D_dbuiq")
+material_override = SubResource("StandardMaterial3D_y2bat")
 mesh = ExtResource("8_moon_model")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="Moon/MoonMesh" unique_id=2055741752]
-material_overlay = SubResource("ShaderMaterial_p71e7")
+material_overlay = SubResource("ShaderMaterial_uvcm7")
 cast_shadow = 0
 script = ExtResource("4_glyph")
 ramp = ExtResource("3_ramp")
@@ -194,6 +193,10 @@ light_dir = Vector3(-0.0008292504, 0.6041256, -0.7968887)
 ambient = -0.015
 dither_enabled = true
 dither_pixel_size = 1.0
+
+[node name="Orbits" type="Node3D" parent="." unique_id=1386239648]
+script = ExtResource("12_orbits")
+sun_light_path = NodePath("../SkyPivot/SunHost/SunLight")
 
 [node name="Player" type="CharacterBody3D" parent="." unique_id=1683103116]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 50.247475, 0)
