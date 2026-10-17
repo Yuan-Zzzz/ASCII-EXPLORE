@@ -21,6 +21,18 @@ func _run() -> void:
 	var initial := field.multimesh.instance_count
 	var earth := scene.get_node("SkyPivot/Earth/GlyphField") as GlyphField
 	assert(earth.multimesh != null and earth.multimesh.instance_count > 50)
+	# 黑洞的 Lens 由 @tool 脚本在编辑器里生成；光学资源也必须是 @tool，
+	# 否则会退回占位实例、拿不到半径与 uniform，编辑器里只剩一个 0 尺寸的 quad。
+	var black_hole := scene.get_node("SkyPivot/BlackHole")
+	var lens := black_hole.get_node_or_null("Lens") as MeshInstance3D
+	assert(lens != null, "Editor must build the black hole lens")
+	assert(lens.extra_cull_margin > 0.0, "Editor lens must have a usable cull radius")
+	var lens_material := lens.material_override as ShaderMaterial
+	assert(lens_material != null, "Editor lens must own a shader material")
+	assert(float(lens_material.get_shader_parameter("u_b_crit")) > 0.0, "Editor lens needs optics uniforms")
+	assert(float(lens_material.get_shader_parameter("u_lens_radius")) > 0.0, "Editor lens needs a viewport-sized radius")
+	assert(float(lens_material.get_shader_parameter("u_ascii")) == 1.0, "Editor lens must show ASCII by default")
+	assert(float(lens_material.get_shader_parameter("u_dither")) == 1.0, "Editor lens must show dither by default")
 	var depth := scene.get_node("Moon/MoonMesh").material_override as StandardMaterial3D
 	assert(depth.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED)
 	field.spacing *= 1.5

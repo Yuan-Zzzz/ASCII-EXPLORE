@@ -3,6 +3,10 @@ extends SceneTree
 
 const OrbitalMotionScript = preload("res://features/moon_walk/orbital_motion.gd")
 const EPSILON := 0.001
+## 轨道半径已到数万单位，float32 在场景变换里会有毫米级重构误差；t=0 只要求视觉一致。
+const T0_EPSILON := 0.01
+## 同理，大坐标下半径的浮点误差允许到厘米级；视觉上完全不可见。
+const ORBIT_RADIUS_EPSILON := 0.05
 
 
 func _initialize() -> void:
@@ -38,11 +42,11 @@ func _run() -> void:
 
 	motion.running = false
 	motion.evaluate_at(0.0)
-	if not (sun.global_position as Vector3).is_equal_approx(sun_authored):
+	if (sun.global_position as Vector3).distance_to(sun_authored) > T0_EPSILON:
 		return _fail("t=0 太阳位置 %s != %s" % [sun.global_position, sun_authored])
-	if not (earth.global_position as Vector3).is_equal_approx(earth_authored):
+	if (earth.global_position as Vector3).distance_to(earth_authored) > T0_EPSILON:
 		return _fail("t=0 地球位置 %s != %s" % [earth.global_position, earth_authored])
-	if not (moon.global_position as Vector3).is_equal_approx(moon_authored):
+	if (moon.global_position as Vector3).distance_to(moon_authored) > T0_EPSILON:
 		return _fail("t=0 月球位置 %s != %s" % [moon.global_position, moon_authored])
 
 	var black_hole_pos := black_hole.global_position
@@ -59,11 +63,11 @@ func _run() -> void:
 	# 月球 1/4 圈时，地球只转了 1/16 圈，太阳只转了 1/40 圈。
 	var quarter: float = motion.moon_period * 0.25
 	motion.evaluate_at(quarter)
-	if sun.global_position.distance_to(black_hole_pos) > sun_radius + EPSILON:
+	if sun.global_position.distance_to(black_hole.global_position) > sun_radius + ORBIT_RADIUS_EPSILON:
 		return _fail("太阳绕黑洞半径漂移")
-	if absf(earth.global_position.distance_to(sun.global_position) - earth_radius) > EPSILON:
+	if absf(earth.global_position.distance_to(sun.global_position) - earth_radius) > ORBIT_RADIUS_EPSILON:
 		return _fail("地球绕太阳半径漂移")
-	if absf(moon.global_position.distance_to(earth.global_position) - moon_radius) > EPSILON:
+	if absf(moon.global_position.distance_to(earth.global_position) - moon_radius) > ORBIT_RADIUS_EPSILON:
 		return _fail("月球绕地球半径漂移")
 
 	var moon_angle := _orbit_angle(moon.global_position - earth.global_position)
@@ -77,14 +81,14 @@ func _run() -> void:
 	if absf(wrapf(earth_angle - earth_angle0, -PI, PI) - earth_expected) > 0.01:
 		return _fail("地球轨道角速度错误: %s" % wrapf(earth_angle - earth_angle0, -PI, PI))
 
-	var sun_angle := _orbit_angle(sun.global_position - black_hole_pos)
+	var sun_angle := _orbit_angle(sun.global_position - black_hole.global_position)
 	var sun_angle0 := _orbit_angle(sun_authored - black_hole_pos)
 	var sun_expected: float = quarter / motion.sun_period * TAU
 	if absf(wrapf(sun_angle - sun_angle0, -PI, PI) - sun_expected) > 0.01:
 		return _fail("太阳轨道角速度错误: %s" % wrapf(sun_angle - sun_angle0, -PI, PI))
 
 	# 玩家与月面保持相对位置，月球高度不变。
-	if not (player.global_position - moon.global_position).is_equal_approx(player_offset):
+	if (player.global_position - moon.global_position).distance_to(player_offset) > T0_EPSILON:
 		return _fail("玩家没有被月球正确携带")
 	if absf((moon.global_position as Vector3).y) > EPSILON:
 		return _fail("月球高度在运动中漂移: %s" % moon.global_position.y)
@@ -96,21 +100,23 @@ func _run() -> void:
 	if aim.dot((moon.global_position - sun.global_position).normalized()) < 0.999:
 		return _fail("太阳光方向错误 aim=%s" % aim)
 
-	# 真实物理帧里让轨道跑起来，确认角色仍站在移动的月球上。
+	# 真实物理帧里让轨道跑起来，确认天空在动、角色仍稳定站在月面上。
 	motion.running = true
 	motion.time_scale = 4.0
 	var moon_start := moon.global_position
+	var earth_start := earth.global_position - moon_start
 	for _i in 180:
 		await physics_frame
-	if moon.global_position.distance_to(moon_start) < 1.0:
-		return _fail("物理帧期间月球没有移动")
+	var sky_shift := (earth.global_position - moon.global_position).distance_to(earth_start)
+	if sky_shift < 1.0:
+		return _fail("物理帧期间天空没有运动")
 	if not player.is_on_floor():
-		return _fail("角色没有站在移动的月球上")
+		return _fail("角色没有站在月面上")
 	var dist := player.global_position.distance_to(moon.global_position)
 	if dist <= moon.radius or dist > moon.radius + 4.0:
 		return _fail("角色相对月心距离异常 %s" % dist)
 
-	# 在移动的月面上继续行走，确认输入、碰撞和轨道携带可以同时工作。
+	# 在轨道运动中的月面上继续行走，确认输入、碰撞和天空动画可以同时工作。
 	var walk_start := player.global_position - moon.global_position
 	Input.action_press("move_forward")
 	for _i in 120:
@@ -118,13 +124,13 @@ func _run() -> void:
 	Input.action_release("move_forward")
 	var walk_delta := (player.global_position - moon.global_position) - walk_start
 	if walk_delta.length() < 5.0:
-		return _fail("在移动月面上行走距离过短 %s" % walk_delta.length())
+		return _fail("在运动月面上行走距离过短 %s" % walk_delta.length())
 	if not player.is_on_floor():
 		return _fail("行走后离开月面")
 
 	print(
-		"ORBIT_OK sun_r=%.2f earth_r=%.2f moon_r=%.2f player_r=%.2f moved=%.2f walk=%.2f"
-		% [sun_radius, earth_radius, moon_radius, dist, moon.global_position.distance_to(moon_start), walk_delta.length()]
+		"ORBIT_OK sun_r=%.2f earth_r=%.2f moon_r=%.2f player_r=%.2f sky=%.2f walk=%.2f"
+		% [sun_radius, earth_radius, moon_radius, dist, sky_shift, walk_delta.length()]
 	)
 	quit(0)
 

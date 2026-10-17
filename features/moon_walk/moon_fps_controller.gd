@@ -13,7 +13,7 @@ class WorldFrame:
 		return offset.normalized()
 
 
-@export var moon_body_path: NodePath = NodePath("../Moon")
+@export var moon_body_path: NodePath = ^"../Moon"
 @export var walk_speed: float = 6.5
 @export var sprint_speed: float = 11.0
 @export var jump_speed: float = 4.0
