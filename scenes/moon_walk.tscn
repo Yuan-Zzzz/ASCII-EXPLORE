@@ -71,6 +71,15 @@ shader_parameter/u_ray_strength = 0.12
 [sub_resource type="QuadMesh" id="QuadMesh_corona"]
 size = Vector2(2, 2)
 
+[sub_resource type="Resource" id="Resource_black_hole_optics"]
+script = ExtResource("11_optics")
+rs = 115.47
+inclination = 0.75
+node_longitude = 0.35
+emissivity_exponent = 1.2
+emissivity_peak = 6.0
+photon_ring_width_rs = 0.22
+photon_ring_gain = 4.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y2bat"]
 shading_mode = 0
@@ -165,6 +174,7 @@ directional_shadow_max_distance = 600.0
 [node name="BlackHole" type="Node3D" parent="SkyPivot" unique_id=1313701991]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5394.988, 2312.138, -3082.85)
 script = ExtResource("10_blackhole")
+optics = SubResource("Resource_black_hole_optics")
 ramp = ExtResource("3_ramp")
 glow_energy = 0.6
 

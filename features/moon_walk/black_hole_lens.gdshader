@@ -33,6 +33,33 @@ uniform float u_dither_color_levels = 4.0;
 uniform vec3 u_ascii_bg = vec3(0.01, 0.012, 0.02);
 uniform float u_glow_energy = 0.18;
 
+// 月面一侧（从月面看黑洞）：
+// u_view_frame：观察者坐标系（相机在 (0, 0, -d)，朝黑洞看）到黑洞坐标系的旋转。
+// u_occlude：透镜作用在没有月亮的天空上；月面本身由字符着色器绘制。
+uniform mat3 u_view_frame = mat3(1.0);
+uniform bool u_occlude = false;
+uniform vec3 u_occluder_center = vec3(0.0, 0.0, 0.0);
+uniform float u_occluder_radius = 1.0;
+// 天空天体：黑洞坐标里的实际中心与铺到无限远球壳上的位置，绕黑洞时用来取背景。
+uniform int u_sky_count = 0;
+uniform vec3 u_sky_center_0 = vec3(0.0);
+uniform vec3 u_sky_center_1 = vec3(0.0);
+uniform vec3 u_sky_height_0 = vec3(0.0);
+uniform vec3 u_sky_height_1 = vec3(0.0);
+uniform float u_sky_radius_0 = 0.0;
+uniform float u_sky_radius_1 = 0.0;
+// 盘面照射月面的光：颜色和形状与 accretion_glow() 一致。
+uniform float u_beam_lit = 0.0;
+uniform vec3 u_beam_energy = vec3(0.0);
+uniform vec3 u_beam_inner = vec3(1.0, 0.82, 0.55);
+uniform vec3 u_beam_outer = vec3(0.85, 0.22, 0.04);
+uniform vec3 u_beam_disk_normal = vec3(0.0, 0.0, 1.0);
+uniform float u_beam_slant_sin = 0.0;
+uniform float u_beam_shadow_cos = 0.0;
+uniform float u_beam_shadow_width = 0.02;
+uniform float u_beam_flat_dark = 0.08;
+uniform float u_beam_sun_cos = 1.0;
+
 const float ANNULUS_EPS = 0.001;
 const float BAYER_4X4[16] = float[16](
 	0.0, 8.0, 2.0, 10.0,
@@ -44,6 +71,9 @@ const float BAYER_4X4[16] = float[16](
 varying vec3 v_world;
 varying vec3 v_center;
 varying float v_radius;
+varying vec3 v_forward;
+varying vec3 v_right;
+varying vec3 v_up;
 
 float deflection_angle(float b) {
 	if (b <= u_b_crit) {
@@ -252,6 +282,91 @@ vec3 present(vec3 col, vec2 frag_xy) {
 	return col;
 }
 
+// ---- 月面一侧的辅助函数 ----
+// 观察者坐标系（观察者在原点，朝黑洞看）。
+vec3 orbit_dir(vec3 world_dir) {
+	return normalize(u_view_frame * world_dir);
+}
+
+vec3 orbit_point(vec3 world_point) {
+	return u_view_frame * (world_point - v_center);
+}
+
+// 观察者坐标系里一点 p 的归一化屏幕坐标（中心 0.5，视野高度 1）。
+vec2 screen_uv_of(vec3 p) {
+	float f = max(dot(p, v_forward), 1.0e-6);
+	return vec2(0.5 + 0.5 * dot(p, v_right) / f, 0.5 + 0.5 * dot(p, v_up) / f);
+}
+
+// 观察者坐标系里月面的有向距离（user-defined SDF）。
+float map(vec3 p) {
+	if (!u_occlude) {
+		return 1.0e20;
+	}
+	return length(p - u_occluder_center) - u_occluder_radius;
+}
+
+// SDF 命中测试：从 from 沿 dir 走到月面。
+bool sdf_ray(vec3 from, vec3 dir, out vec3 hit_pos, out vec3 hit_normal, out float ray_length) {
+	ray_length = 0.0;
+	if (!u_occlude) {
+		return false;
+	}
+	vec3 oc = from - u_occluder_center;
+	float b = dot(oc, dir);
+	float c = dot(oc, oc) - u_occluder_radius * u_occluder_radius;
+	float h = b * b - c;
+	if (h < 0.0) {
+		return false;
+	}
+	h = sqrt(h);
+	ray_length = max(-b - h, 0.0);
+	hit_pos = from + dir * ray_length;
+	float radius = length(hit_pos - u_occluder_center);
+	hit_normal = radius > 1.0e-6 ? (hit_pos - u_occluder_center) / radius : dir;
+	return true;
+}
+
+// 天空天体：观察者在原点，天体是视角平面上一块角半径 radius / |center| 的圆斑。
+// 命中后沿它铺到球壳上的方向取样，透镜才会把天体弯开、拉成环。
+bool sky_one(vec3 dir, vec3 center, vec3 height, float radius, out vec3 sky_dir) {
+	sky_dir = dir;
+	float distance = max(length(center), 1.0e-3);
+	if (radius <= 0.0) {
+		return false;
+	}
+	float cone = asin(clamp(radius / distance, 0.0, 0.999));
+	if (acos(clamp(dot(dir, center / distance), -1.0, 1.0)) > cone) {
+		return false;
+	}
+	sky_dir = normalize(height);
+	return true;
+}
+
+bool sky_hit(vec3 dir, out vec3 sky_dir) {
+	if (u_sky_count >= 1 && sky_one(dir, u_sky_center_0, u_sky_height_0, u_sky_radius_0, sky_dir)) {
+		return true;
+	}
+	if (u_sky_count >= 2 && sky_one(dir, u_sky_center_1, u_sky_height_1, u_sky_radius_1, sky_dir)) {
+		return true;
+	}
+	sky_dir = dir;
+	return false;
+}
+
+// 来自黑洞的辐照：盘的近侧更亮；来自黑洞背面、偏离盘法线超过阴影角的点只剩边缘光。
+float shadow_light(vec3 e_dir) {
+	float slant = dot(u_beam_disk_normal, e_dir);
+	float lit = mix(u_beam_flat_dark, 1.0, smoothstep(u_beam_shadow_cos, u_beam_shadow_cos + u_beam_shadow_width, slant));
+	lit *= mix(0.25, 1.0, smoothstep(0.0, 0.35, u_beam_sun_cos));
+	return lit;
+}
+
+// 盘面光束的颜色：近侧亮、远侧暗。
+vec3 beam_tint() {
+	return u_beam_energy * mix(u_beam_inner, u_beam_outer, u_beam_slant_sin);
+}
+
 void vertex() {
 	vec3 center_world = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	float dist = length(CAMERA_POSITION_WORLD - center_world);
@@ -267,10 +382,41 @@ void vertex() {
 	right = normalize(right);
 	vec3 up = normalize(cross(forward, right));
 	mat3 to_model = inverse(mat3(MODEL_MATRIX));
-	VERTEX = (to_model * right) * VERTEX.x * radius + (to_model * up) * VERTEX.y * radius;
-	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 world_pos;
+	if (u_occlude) {
+		// 月面一侧：透镜半径可能超出相机远平面，按透镜在屏幕上的大小重铺 quad。
+		// world_focus：视野高度 = 2 时的相机空间深度。
+		float world_focus = 2.0 / PROJECTION_MATRIX[1][1];
+		float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
+		float forward_depth = max(dot(center_world - CAMERA_POSITION_WORLD, forward), 0.0001);
+		// 只覆盖透镜半径 radius，加 2% 留边；超出部分的采样 clamp 到屏幕边。
+		float keep = clamp(radius / max(forward_depth, 0.0001) * (PROJECTION_MATRIX[1][1] * 0.5) * 1.02, 0.01, 1.0);
+		float quad_depth = clamp(forward_depth, 0.25 * world_focus, 0.98 * world_focus);
+		float half_height = quad_depth / (PROJECTION_MATRIX[1][1] * 0.5) * keep;
+		float half_width = half_height * aspect;
+		vec3 view_right = cross(vec3(0.0, 1.0, 0.0), forward);
+		if (dot(view_right, view_right) < 1e-6) {
+			view_right = right;
+		}
+		view_right = normalize(view_right);
+		vec3 view_up = normalize(cross(forward, view_right));
+		world_pos = center_world
+			+ forward * (quad_depth - forward_depth)
+			+ view_right * (VERTEX.x * half_width)
+			+ view_up * (VERTEX.y * half_height);
+		right = view_right;
+		up = view_up;
+	} else {
+		VERTEX = (to_model * right) * VERTEX.x * radius + (to_model * up) * VERTEX.y * radius;
+		world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	}
+	VERTEX = to_model * (world_pos - center_world);
+	v_world = world_pos;
 	v_center = center_world;
 	v_radius = radius;
+	v_forward = forward;
+	v_right = right;
+	v_up = up;
 }
 
 void fragment() {
@@ -279,71 +425,138 @@ void fragment() {
 		discard;
 	}
 	vec3 dir = normalize(v_world - CAMERA_POSITION_WORLD);
-	vec3 to_center = v_center - CAMERA_POSITION_WORLD;
-	float t_ca = dot(to_center, dir);
-	vec3 closest = CAMERA_POSITION_WORLD + t_ca * dir;
-	vec3 b_vec = closest - v_center;
-	float b = length(b_vec);
-	if (b > v_radius) {
-		discard;
+	if (u_occlude) {
+		// 月面一侧：同一套透镜作用在没有月亮的天空上。
+		// 追迹到的月面点按屏幕映射映回同一个像素：阴影里的那一格就是黑洞“搬”过来的背景，
+		// 可见的月面交给字符着色器，这里只叠加黑洞打来的光。
+		vec3 f_dir = orbit_dir(dir);
+		vec3 f_cam = orbit_point(CAMERA_POSITION_WORLD);
+		vec3 to_center = -f_cam;
+		float dist = max(length(to_center), 0.0001);
+		vec3 axis = to_center / dist;
+		float psi_app = acos(clamp(dot(f_dir, axis), -1.0, 1.0));
+		float cos_a = clamp(dot(f_dir, -axis), -1.0, 1.0);
+		float b = dist * sqrt(max(1.0 - cos_a * cos_a, 0.0));
+		float alpha = apodized_deflection(b, v_radius);
+		float scale = sample_scale(psi_app, alpha);
+		float xh = screen_uv_of(to_center).x;
+		vec3 col = vec3(0.0);
+		vec3 light = vec3(0.0);
+		vec3 hit_pos;
+		vec3 hit_normal;
+		float ray_length;
+		if (sdf_ray(f_cam, f_dir, hit_pos, hit_normal, ray_length)) {
+			// 月面点按“从黑洞反向落回”的方向投到透镜的屏幕映射上（横向向圆心压缩），
+			// 得到被黑洞透镜重新排布过的星空。
+			vec3 back = -hit_normal;
+			float los_cos = clamp(dot(back, -axis), -1.0, 1.0);
+			float back_b = dist * sqrt(max(1.0 - los_cos * los_cos, 0.0));
+			float back_alpha = apodized_deflection(back_b, v_radius);
+			float back_psi = acos(clamp(dot(back, axis), -1.0, 1.0));
+			float back_scale = sample_scale(back_psi, back_alpha);
+			vec2 source_uv = clamp(vec2(
+				xh + (SCREEN_UV.x - 0.5 - xh) * back_scale,
+				0.5 + (SCREEN_UV.y - 0.5) * back_scale
+			), vec2(0.001), vec2(0.999));
+			vec3 background = texture(screen_texture, source_uv).rgb;
+			// 天空天体：沿透镜偏折后的方向看。
+			vec3 lateral = back - axis * dot(back, axis);
+			lateral = length(lateral) > 1.0e-6 ? normalize(lateral) : v_up;
+			vec3 sky_dir;
+			if (sky_hit(back - lateral * 2.0 * min(back_alpha, 3.0), sky_dir)) {
+				background = texture(screen_texture, clamp(screen_uv_of(sky_dir), vec2(0.001), vec2(0.999))).rgb;
+			}
+			// e：像素方向上落在月面球面上的点。它到轴线的距离 e_b 在事件视界内，这一格就属于黑洞。
+			vec3 e_dir = normalize(u_occluder_center + f_dir * max(ray_length, 0.0) - f_cam * 0.0);
+			float moon_distance = length(u_occluder_center + f_cam);
+			float e_los = dot(e_dir, -axis);
+			float e_b = moon_distance * sqrt(max(1.0 - e_los * e_los, 0.0));
+				float inside = e_b < u_b_crit ? 1.0 : 0.0;
+			col = background * inside;
+			light = beam_tint() * u_beam_lit * shadow_light(e_dir) * (1.0 - inside);
+		} else if (b > u_b_crit) {
+			// 视线擦过黑洞边缘：被抠掉的月面位置换回透镜化的星空。
+			vec2 src = vec2((SCREEN_UV.x - xh) * scale, (SCREEN_UV.y - 0.5) * scale);
+			vec2 sample_uv = clamp(vec2(xh + src.x, 0.5 + src.y), vec2(0.001), vec2(0.999));
+			col = texture(screen_texture, sample_uv).rgb;
+		}
+		col += light;
+		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
+		ALPHA = 1.0 - smoothstep(v_radius * 0.92, v_radius, b);
 	}
-	float alpha = apodized_deflection(b, v_radius);
-	float dist = max(length(to_center), 0.0001);
-	float psi_app = acos(clamp(dot(dir, to_center / dist), -1.0, 1.0));
-	float scale = sample_scale(psi_app, alpha);
 
-	bool have_disk = false;
-	float best_dist = 1.0e20;
-	vec3 best_point = vec3(0.0);
-	float best_radius = 0.0;
-	vec3 hit_point;
-	float hit_radius;
-	if (disk_hit(CAMERA_POSITION_WORLD, dir, v_center, hit_point, hit_radius) && clears_horizon(CAMERA_POSITION_WORLD, hit_point, v_center)) {
-		have_disk = true;
-		best_dist = length(hit_point - CAMERA_POSITION_WORLD);
-		best_point = hit_point;
-		best_radius = hit_radius;
-	}
-	if (b > u_b_crit && dot(b_vec, b_vec) > 1e-8) {
-		vec3 turned = rotate_toward(dir, -normalize(b_vec), min(deflection_angle(b), PI));
-		if (disk_hit(closest, turned, v_center, hit_point, hit_radius)) {
-			float egress_dist = length(hit_point - CAMERA_POSITION_WORLD);
-			if (!have_disk || egress_dist < best_dist) {
-				have_disk = true;
-				best_point = hit_point;
-				best_radius = hit_radius;
+	else {
+		vec3 to_center = v_center - CAMERA_POSITION_WORLD;
+		float t_ca = dot(to_center, dir);
+		vec3 closest = CAMERA_POSITION_WORLD + t_ca * dir;
+		vec3 b_vec = closest - v_center;
+		float b = length(b_vec);
+		if (b > v_radius) {
+			discard;
+		}
+		float alpha = apodized_deflection(b, v_radius);
+		float dist = max(length(to_center), 0.0001);
+		float psi_app = acos(clamp(dot(dir, to_center / dist), -1.0, 1.0));
+		float scale = sample_scale(psi_app, alpha);
+
+		bool have_disk = false;
+		float best_dist = 1.0e20;
+		vec3 best_point = vec3(0.0);
+		float best_radius = 0.0;
+		vec3 hit_point;
+		float hit_radius;
+		if (disk_hit(CAMERA_POSITION_WORLD, dir, v_center, hit_point, hit_radius) && clears_horizon(CAMERA_POSITION_WORLD, hit_point, v_center)) {
+			have_disk = true;
+			best_dist = length(hit_point - CAMERA_POSITION_WORLD);
+			best_point = hit_point;
+			best_radius = hit_radius;
+		}
+		if (b > u_b_crit && dot(b_vec, b_vec) > 1e-8) {
+			vec3 turned = rotate_toward(dir, -normalize(b_vec), min(deflection_angle(b), PI));
+			if (disk_hit(closest, turned, v_center, hit_point, hit_radius)) {
+				float egress_dist = length(hit_point - CAMERA_POSITION_WORLD);
+				if (!have_disk || egress_dist < best_dist) {
+					have_disk = true;
+					best_point = hit_point;
+					best_radius = hit_radius;
+				}
 			}
 		}
-	}
 
-	vec3 col;
-	if (have_disk) {
-		float g_shift = redshift_g(best_radius, orbital_los(best_point, v_center, CAMERA_POSITION_WORLD));
-		col = disk_color(best_point, v_center, best_radius, g_shift);
-	} else if (b <= u_b_crit) {
-		col = vec3(0.0);
-	} else {
-		vec2 ndc = clip.xy / clip.w;
-		vec2 bh_uv = ndc * 0.5 + 0.5;
-		float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
-		vec2 delta = SCREEN_UV - bh_uv;
-		delta.x *= aspect;
-		vec2 src = delta * scale;
-		src.x /= aspect;
-		vec2 sample_uv = clamp(bh_uv + src, vec2(0.001), vec2(0.999));
-		vec3 background = texture(screen_texture, sample_uv).rgb;
-		// Empty near-black sky: inject stars in the deflected UV so lensing is visible.
-		float sky_lum = dot(background, vec3(0.299, 0.587, 0.114));
-		vec2 star_uv = (delta * scale) * 0.55 + vec2(u_disk_phase * 0.02, u_time * 0.01);
-		background += starfield(star_uv) * mix(1.0, 0.25, smoothstep(0.02, 0.12, sky_lum));
-		float los = ring_los(b_vec);
-		float g_shift = redshift_g(u_disk_inner, los);
-		float falloff = exp(-pow((b - u_b_crit) / max(u_photon_sigma, 0.0001), 2.0));
-		float ring = u_photon_gain * u_emissivity_peak * pow(g_shift, 4.0) * falloff;
-		float pulse = 0.85 + 0.15 * sin(u_time * 5.0 + b * 3.0);
-		col = background + u_color_inner.rgb * ring * pulse * 1.35;
-	}
+		vec3 col;
+		if (have_disk) {
+			float g_shift = redshift_g(best_radius, orbital_los(best_point, v_center, CAMERA_POSITION_WORLD));
+			col = disk_color(best_point, v_center, best_radius, g_shift);
+		} else if (b <= u_b_crit) {
+			col = vec3(0.0);
+		} else {
+			vec2 ndc = clip.xy / clip.w;
+			vec2 bh_uv = ndc * 0.5 + 0.5;
+			float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
+			vec2 delta = SCREEN_UV - bh_uv;
+			delta.x *= aspect;
+			vec2 src = delta * scale;
+			src.x /= aspect;
+			vec2 sample_uv = clamp(bh_uv + src, vec2(0.001), vec2(0.999));
+			vec3 background = texture(screen_texture, sample_uv).rgb;
+			// Empty near-black sky: inject stars in the deflected UV so lensing is visible.
+			float sky_lum = dot(background, vec3(0.299, 0.587, 0.114));
+			vec2 star_uv = (delta * scale) * 0.55 + vec2(u_disk_phase * 0.02, u_time * 0.01);
+			background += starfield(star_uv) * mix(1.0, 0.25, smoothstep(0.02, 0.12, sky_lum));
+			float los = ring_los(b_vec);
+			float g_shift = redshift_g(u_disk_inner, los);
+			float falloff = exp(-pow((b - u_b_crit) / max(u_photon_sigma, 0.0001), 2.0));
+			float ring = u_photon_gain * u_emissivity_peak * pow(g_shift, 4.0) * falloff;
+			float pulse = 0.85 + 0.15 * sin(u_time * 5.0 + b * 3.0);
+			col = background + u_color_inner.rgb * ring * pulse * 1.35;
+		}
 
-	ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE) + accretion_glow(b, b_vec) * u_glow_energy;
-	ALPHA = 1.0;
+		// 辉光属于画面的一部分，必须先合入再走 ASCII / Bayer。
+		// 否则会被加在 present() 之后，绕过字符与抖动，成为一圈平滑的亮边。
+		// 外晕在透镜边缘之前淡出，避免被 quad 裁成硬边。
+		float glow_fade = 1.0 - smoothstep(v_radius * 0.72, v_radius, b);
+		col += accretion_glow(b, b_vec) * u_glow_energy * glow_fade;
+		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
+		ALPHA = 1.0;
+	}
 }

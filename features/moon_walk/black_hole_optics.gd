@@ -1,8 +1,11 @@
+@tool
 class_name BlackHoleOptics
 extends Resource
 ## 史瓦西光学。只存独立量。阴影、光子球、盘法线和红移都从这些量推出。
 ## 位置不在这份资源里。trace 的 center 是 BlackHole 的原点。
 ## 盘法线只由 inclination 和 node_longitude 决定，不读节点的 basis。
+## 盘面朝向由黑潮坐标系的 node_longitude 决定；观察者绕同一节点轴转 180°，
+## 盘的镜像姿态完全复现，从月面看黑洞就像从黑洞看月面，所以黑洞可以作为光源。
 
 const ISCO_IN_RS := 3.0
 const PHOTON_SPHERE_IN_RS := 1.5
@@ -14,6 +17,8 @@ const COLOR_INNER := Color(1.0, 0.82, 0.55)
 const COLOR_OUTER := Color(0.85, 0.22, 0.04)
 ## 射线归一化后，正好落在内缘上的交点会比半径小几个 ulp。闭合环带，避免合法内缘被丢掉。
 const ANNULUS_EPS := 1.0e-3
+## 阴影角半径的上限。用 to_black_hole_frame 把观察者塞到靠近黑洞时，缺口半径可以超过这个值。
+const SHADOW_CONE_LIMIT := 2.5
 
 var _good_rs: float
 var _good_disk_inner_rs: float
@@ -201,6 +206,79 @@ func disk_normal() -> Vector3:
 
 func lens_radius() -> float:
 	return LENS_SHADOW_MULTIPLE * shadow_radius()
+
+
+## 节点轴：倾斜角衡量它与盘法线的夹角。盘面绕它旋转 node_longitude。
+func node_axis() -> Vector3:
+	return disk_normal().cross(Vector3.UP).normalized()
+
+
+## 观察者坐标系到黑洞坐标系的旋转：绕节点轴转 node_longitude，
+## 让倾斜量落在 x 轴上（与 BlackHole 里 -Z 指向观察者的默认朝向一致）。
+static func to_black_hole_frame(node_longitude: float) -> Basis:
+	return Basis(Vector3.UP, node_longitude)
+
+
+func black_hole_frame() -> Basis:
+	return to_black_hole_frame(node_longitude)
+
+
+## 观察者坐标系里作为光源的盘：法线取盘法线的反号。
+## 观察者在 -Z 一侧等于从盘的上方看；观察者翻到 +Z 一侧时，
+## 盘法线由 (sin i sin n, cos i, sin i cos n) 变成 (-sin i sin n, cos i, -sin i cos n)，
+## 正好是镜像的黑洞。着色器里的 accretion_glow() 用同一组角度重建，因此两边亮度一致。
+func light_disk_normal() -> Vector3:
+	return (black_hole_frame() * -disk_normal()).normalized()
+
+
+## 遮蔽角半径：视线侧倾超过它就被事件视界挡住。大 b 处接近 1.5 * rs / b。
+func shadow_cone_radius(distance: float) -> float:
+	if distance <= rs:
+		return PI * 0.5
+	return minf(asin(shadow_radius() / distance), SHADOW_CONE_LIMIT)
+
+
+## 从观察者看到的盘面光束辐射：d = 覆盖比例，cone = 视线侧倾角，
+## los = 观察者视线在盘面内的速度投影（多普勒），g_shift = 红移。
+## 与 black_hole_lens.gdshader 的 accretion_glow() 同形：近侧辉光更亮，远侧更暗。
+func beam_radiance(g_shift: float, cone: float, coverage: float, los: float) -> Color:
+	var beaming := pow(maxf(g_shift, 0.2), 4.0)
+	return COLOR_INNER * emissivity_peak * beaming * beam_shape(cone, coverage)
+
+
+static func beam_shape(cone: float, coverage: float) -> float:
+	var slant := sin(cone)
+	var ring_halo := exp(-pow(clampf(1.0 - slant, 0.0, 1.0) / 1.15, 2.0))
+	var outer_halo := exp(-pow(clampf(1.0 - slant, 0.0, 1.0) / 3.2, 2.0))
+	return maxf(coverage, 0.0) * (ring_halo + 0.18 * outer_halo)
+
+
+## 观察者坐标系的 Beam：光源位置、光束张角、衰减强度与径向色带。
+## 与 light_disk_normal() 同一套角度，所以画出来的颜色和打在月面上的光一致。
+func beam_state(observer: Vector3, with_shadow: bool = true) -> Dictionary:
+	var center := -observer
+	var distance := center.length()
+	var dir := light_disk_normal()
+	var cone := acos(clampf((-center / maxf(distance, 1.0e-6)).dot(dir), -1.0, 1.0))
+	var coverage := 1.0
+	var shadow_cone := PI * 0.5
+	if with_shadow:
+		shadow_cone = shadow_cone_radius(distance)
+		coverage = smoothstep(shadow_cone * 0.92, shadow_cone, cone)
+	var g_shift := _redshift(disk_inner_radius(), _orbital_los(disk_inner_radius() * dir, Vector3.ZERO, observer))
+	return {
+		"alive": true,
+		"with_shadow": with_shadow,
+		"center": center,
+		"direction": dir,
+		"distance": distance,
+		"cone": cone,
+		"coverage": coverage,
+		"shadow_cone": shadow_cone,
+		"radiance": beam_radiance(g_shift, cone, coverage, 0.0),
+		"inner": COLOR_INNER,
+		"outer": COLOR_OUTER,
+	}
 
 
 func uniform_block() -> Dictionary:

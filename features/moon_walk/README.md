@@ -116,6 +116,17 @@ ASCII 3D 模式的字符使用采样表面法线参与 Godot 原生光照，字�
 
 `SkyPivot/SunHost/Corona` 是一片始终面向摄像机的加色辉光面，平面位于日心，被太阳前半球遮挡，所以在轮廓外形成日冕。颜色、能量、衰减和角向流纹在 `features/moon_walk/sun_corona.gdshader` 以及 `Corona` 节点的材质参数里调整。
 
-黑洞本身不发光。`black_hole_lens.gdshader` 的 `accretion_glow()` 只在 `b > b_crit`（事件视界之外）返回辉光，光源是吸积盘和光子环；亮度沿用与吸积盘相同的多普勒增亮和引力红移 `g^4`，因此接近侧辉光更亮，远离侧更暗。`BlackHole` 节点的 `Glow Energy` 控制强度，设为 0 可关闭。
+黑洞的吸积盘同时照亮月面，见下一节。视野里的辉光由 `black_hole_lens.gdshader` 的 `accretion_glow()` 给出，只在 `b > b_crit`（事件视界之外）返回，光源是吸积盘和光子环；亮度沿用与吸积盘相同的多普勒增亮和引力红移 `g^4`，因此接近侧辉光更亮，远离侧更暗。辉光在 `present()` 之前合入，所以和盘、光子环一起经过拜耳抖动与字符化：`ASCII 3D` 下变成字符，`Bayer Model` 下变成网点，`ASCII + Bayer` 下两者都有；外晕在透镜边缘前淡出，不会被 quad 裁成硬边。`BlackHole` 节点的 `Glow Energy` 控制强度，默认 1.2，设为 0 可关闭。
 
 `WorldEnvironment` 开启了 HDR 阈值 1.0 的环境辉光：超过 1 的太阳核心和日冕会产生 bloom。黑洞的吸积盘与辉光在 `present()` 里已被色调映射和抖动量化，因此以字符 / 网点呈现，不再依赖全屏 bloom。月面和地球的普通字符不会被整体提亮。
+
+## 黑洞作为光源
+
+黑洞的吸积盘是月面的第二光源，和太阳同时照亮月面，月面朝黑洞的一侧明显更亮。
+
+- `BlackHole` 运行时创建一个 `DiskLight`（`SpotLight3D`），放在黑洞位置、照向月心，颜色取盘面的 `COLOR_INNER`。张角按事件视界在月面上的大小换算（月面距离下约 2.6°，镜头里约 4.15°），轨道运动把黑洞拉远拉近时每帧重新计算；能量由 `Light Energy` 控制，默认 1.2，设为 0 关闭。它是普通光源，月面字符按 Godot 原生光照计算。
+- `ASCII 3D` 模式的字符在计算前会先叠一层 `u_backdrop` 底色（`GlyphField.Backdrop`）。底色照常被全部光源照亮，字符只叠在上面对应字形的位置，所以背对光源的地面只剩底色，不会黑成一片、只剩零星的高亮字符。
+- 黑洞在 `MoonLens` 这一层；月亮网格不在该层，所以从月面看黑洞时透镜取到的是“没有月亮”的天空，可见月面仍由字符绘制。
+- `Bayer Model` 模式的覆盖层（`features/dither/bayer_model.gdshader`）在月面上把未抖动的光照画面作为亮度乘数，因此黑洞的光同样进入抖动模式。
+
+回归：`godot --headless --path . --script res://tools/test_black_hole_light.gd` 检查光源位置与朝向、张角随距离更新、`Light Energy` 开关，以及 Bayer 覆盖层的光照乘数。

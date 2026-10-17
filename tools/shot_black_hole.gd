@@ -38,14 +38,17 @@ func _run() -> void:
 	var normal: Vector3 = optics.disk_normal()
 	# Face the disk so the ring is not a thin crescent.
 	var view_dir := (normal * 0.75 + Vector3(0.35, 0.1, 0.2)).normalized()
+	# 构图距离跟随黑洞光学尺寸，改 rs 后不必手动改数值。
+	var far_dist := maxf(optics.disk_outer_radius() * 2.2, optics.shadow_radius() * 4.0)
+	var close_dist := maxf(optics.disk_outer_radius() * 1.1, optics.shadow_radius() * 2.5)
 
-	player.global_position = center + view_dir * 95.0
+	player.global_position = center + view_dir * far_dist
 	cam.look_at(center, Vector3.UP)
 	await _settle(100)
 	if not await _save(cam, "res://bh_shot.png"):
 		return
 
-	player.global_position = center + view_dir * 42.0
+	player.global_position = center + view_dir * close_dist
 	cam.look_at(center, Vector3.UP)
 	await _settle(100)
 	if not await _save(cam, "res://bh_shot_close.png"):

@@ -22,6 +22,8 @@ func _scene_contract() -> bool:
 	if packed == null:
 		return _fail("load moon_walk.tscn")
 	var main := packed.instantiate()
+	# 黑洞在天空参考系里随月球轨道整体平移；结构检查固定 t=0 的布局，先暂停轨道。
+	main.get_node("Orbits").running = false
 	root.add_child(main)
 	await process_frame
 	await process_frame
@@ -35,7 +37,7 @@ func _scene_contract() -> bool:
 	var bh = main.get_node_or_null("SkyPivot/BlackHole")
 	if bh == null or bh.get_script() != BlackHoleScript:
 		return _fail("missing SkyPivot/BlackHole")
-	if not (bh.global_position as Vector3).is_equal_approx(Vector3(168, 72, -96)):
+	if not (bh.global_position as Vector3).is_equal_approx(Vector3(5394.988, 2312.138, -3082.85)):
 		return _fail("origin %s" % bh.global_position)
 	if bh.get_node_or_null("GlyphField") != null:
 		return _fail("BlackHole must not own GlyphField")
@@ -84,6 +86,8 @@ func _scene_contract() -> bool:
 	for key in block:
 		allowed[String(key)] = true
 	for key in BlackHoleScript.PRESENTATION_KEYS:
+		allowed[String(key)] = true
+	for key in BlackHoleScript.LUNAR_KEYS:
 		allowed[String(key)] = true
 	for uname in listed:
 		if String(uname).begins_with("u_") and not allowed.has(String(uname)):

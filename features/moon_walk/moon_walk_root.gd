@@ -14,6 +14,9 @@ const ModelDitherShader = preload("res://features/dither/bayer_model.gdshader")
 
 var _active_surface_mode: int = -1
 
+## 黑洞透镜的渲染层：这一层只留天空、黑洞和它自己的 Lens（月亮本体不在其中）。
+const LENS_LAYER := 10
+
 @onready var sun_light: DirectionalLight3D = $SkyPivot/SunHost/SunLight
 @onready var moon_mesh: MeshInstance3D = $Moon/MoonMesh
 @onready var earth: MeshInstance3D = $SkyPivot/Earth
@@ -30,6 +33,9 @@ func _ready() -> void:
 	_apply_depth_hosts()
 	_collect_glyph_fields()
 	_sync_light_to_glyphs()
+	# 月亮本体在黑洞透镜所在的层消失：透镜要取“没有月亮时的天空”，
+	# 可见的月面由字符画出，阴影里的月面由透镜画出。
+	moon_mesh.layers = _lens_layers(moon_mesh.layers)
 
 
 func _process(_delta: float) -> void:
@@ -52,6 +58,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if button.pressed and button.button_index == MOUSE_BUTTON_LEFT:
 			if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and DisplayServer.get_name() != "headless":
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## 从 layers 里去掉黑洞透镜层。
+static func _lens_layers(layers: int) -> int:
+	return layers & ~(1 << (LENS_LAYER - 1))
 
 
 func _collect_glyph_fields() -> void:
@@ -130,3 +141,5 @@ func _sync_light_to_glyphs() -> void:
 		if overlay != null:
 			overlay.set_shader_parameter("u_pixel_size", dither_pixel_size)
 			overlay.set_shader_parameter("u_color_levels", dither_color_levels)
+			# 月面被太阳和黑洞同时照亮：抖动的颜色乘上没抖动前的光照画面。
+			overlay.set_shader_parameter("lit_weight", 1.0 if host == moon_mesh else 0.0)
