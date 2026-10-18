@@ -181,6 +181,10 @@ bool clears_horizon(vec3 camera, vec3 point, vec3 center) {
 	return length(mix(camera, point, t) - center) >= u_rs;
 }
 
+bool disk_is_near(vec3 point, vec3 camera, vec3 center) {
+	return dot(point - center, camera - center) > 0.0;
+}
+
 float disk_swirl(vec3 point, vec3 center, float radius) {
 	vec3 radial = point - center;
 	radial -= u_disk_normal * dot(radial, u_disk_normal);
@@ -499,26 +503,36 @@ void fragment() {
 		float psi_app = acos(clamp(dot(dir, to_center / dist), -1.0, 1.0));
 		float scale = sample_scale(psi_app, alpha);
 
+		// Near primary → shadow if b≤b_crit → far primary / secondary outside critical curve.
 		bool have_disk = false;
 		float best_dist = 1.0e20;
 		vec3 best_point = vec3(0.0);
 		float best_radius = 0.0;
 		vec3 hit_point;
 		float hit_radius;
-		if (disk_hit(CAMERA_POSITION_WORLD, dir, v_center, hit_point, hit_radius) && clears_horizon(CAMERA_POSITION_WORLD, hit_point, v_center)) {
+		bool ingress_ok = disk_hit(CAMERA_POSITION_WORLD, dir, v_center, hit_point, hit_radius)
+				&& clears_horizon(CAMERA_POSITION_WORLD, hit_point, v_center);
+		if (ingress_ok && disk_is_near(hit_point, CAMERA_POSITION_WORLD, v_center)) {
 			have_disk = true;
 			best_dist = length(hit_point - CAMERA_POSITION_WORLD);
 			best_point = hit_point;
 			best_radius = hit_radius;
-		}
-		if (b > u_b_crit && dot(b_vec, b_vec) > 1e-8) {
-			vec3 turned = rotate_toward(dir, -normalize(b_vec), min(deflection_angle(b), PI));
-			if (disk_hit(closest, turned, v_center, hit_point, hit_radius)) {
-				float egress_dist = length(hit_point - CAMERA_POSITION_WORLD);
-				if (!have_disk || egress_dist < best_dist) {
-					have_disk = true;
-					best_point = hit_point;
-					best_radius = hit_radius;
+		} else if (b > u_b_crit) {
+			if (ingress_ok) {
+				have_disk = true;
+				best_dist = length(hit_point - CAMERA_POSITION_WORLD);
+				best_point = hit_point;
+				best_radius = hit_radius;
+			}
+			if (dot(b_vec, b_vec) > 1e-8) {
+				vec3 turned = rotate_toward(dir, -normalize(b_vec), min(deflection_angle(b), PI));
+				if (disk_hit(closest, turned, v_center, hit_point, hit_radius)) {
+					float egress_dist = length(hit_point - CAMERA_POSITION_WORLD);
+					if (!have_disk || egress_dist < best_dist) {
+						have_disk = true;
+						best_point = hit_point;
+						best_radius = hit_radius;
+					}
 				}
 			}
 		}

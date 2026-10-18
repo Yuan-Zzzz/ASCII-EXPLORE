@@ -443,12 +443,25 @@ func _segment_clears_horizon(camera: Vector3, point: Vector3, center: Vector3) -
 	return camera.lerp(point, t).distance_to(center) >= rs
 
 
+func _disk_is_near(point: Vector3, camera: Vector3, center: Vector3) -> bool:
+	## 交点在相机相对黑洞中心的同一半球 → 近侧一次像。
+	return (point - center).dot(camera - center) > 0.0
+
+
 func _pick_disk(cam: Vector3, dir: Vector3, center: Vector3, b: float, b_vec: Vector3, closest: Vector3) -> Dictionary:
-	var chosen := {}
+	## 优先级与真实薄盘成像一致：近侧一次像 → b≤b_crit 阴影无盘 → 轮廓外远侧一次/二次像。
 	var ingress := _disk_hit_on_ray(cam, dir, center, 0.0, INF)
 	if not ingress.is_empty() and _segment_clears_horizon(cam, ingress["point"], center):
+		if _disk_is_near(ingress["point"], cam, center):
+			return ingress
+		if b <= shadow_radius():
+			return {}
+	elif b <= shadow_radius():
+		return {}
+	var chosen := {}
+	if not ingress.is_empty() and _segment_clears_horizon(cam, ingress["point"], center):
 		chosen = ingress
-	# 远侧盘用未渐晕的偏折。渐晕只收背景 UV，不改盘的弯折。
+	# 远侧二次像：未渐晕偏折。渐晕只收背景 UV，不改盘的弯折。
 	if b > shadow_radius() and b_vec.length_squared() > 1.0e-8:
 		var turned := _rotate_toward(dir, -b_vec.normalized(), minf(_deflection_angle(b), PI))
 		var egress := _disk_hit_on_ray(closest, turned, center, 0.0, INF)

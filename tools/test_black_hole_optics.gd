@@ -12,6 +12,8 @@ func _run() -> void:
 		return
 	if not await _call_site_doppler():
 		return
+	if not await _call_site_occlusion():
+		return
 	if not await _rejects_inconsistent_pair():
 		return
 	print("OPTICS_OK")
@@ -66,6 +68,41 @@ func _call_site_doppler() -> bool:
 		return _fail("doppler g approach=%s recede=%s" % [approach.disk_g, recede.disk_g])
 	if approach.albedo.r <= recede.albedo.r:
 		return _fail("doppler albedo approach=%s recede=%s" % [approach.albedo.r, recede.albedo.r])
+	return true
+
+
+func _call_site_occlusion() -> bool:
+	## Far-side primary must not paint inside b_crit; near-side may still cross the silhouette.
+	var optics = OpticsScript.new()
+	optics.rs = 115.47
+	optics.inclination = 0.75
+	optics.node_longitude = 0.35
+	optics.emissivity_exponent = 1.2
+	optics.emissivity_peak = 6.0
+	await process_frame
+	var center := Vector3.ZERO
+	var cam := Vector3(0.0, 400.0, 800.0)
+	var b_crit: float = optics.shadow_radius()
+	var far_fill := 0
+	for i in 24:
+		for j in 24:
+			var u := (float(i) / 23.0 - 0.5) * 2.0
+			var v := (float(j) / 23.0 - 0.5) * 2.0
+			var target := Vector3(u * b_crit * 0.9, v * b_crit * 0.9, 0.0)
+			var hit = optics.trace(center, OpticsScript.Ray.looking(cam, target))
+			if hit.disk_radius > 0.0 and hit.impact <= b_crit + 1.0e-3 and not hit.captured:
+				far_fill += 1
+	if far_fill > 0:
+		return _fail("far disk filled shadow in %s samples" % far_fill)
+	var deep = optics.trace(center, OpticsScript.Ray.with_impact(cam, center, b_crit * 0.5, Vector3.RIGHT))
+	if not (deep.valid and deep.captured and deep.disk_radius <= 0.0):
+		return _fail("0.5 b_c should capture without disk captured=%s disk_r=%s" % [deep.captured, deep.disk_radius])
+	var near = optics.trace(center, OpticsScript.Ray.looking(cam, Vector3(-optics.disk_inner_radius() * 1.2, 0.0, 0.0)))
+	if not near.valid or near.captured or near.disk_radius <= 0.0:
+		return _fail("near primary missing disk_r=%s captured=%s" % [near.disk_radius, near.captured])
+	var outer = optics.trace(center, OpticsScript.Ray.with_impact(cam, center, b_crit * 1.05, Vector3.UP))
+	if outer.captured:
+		return _fail("just outside b_c must not capture")
 	return true
 
 
