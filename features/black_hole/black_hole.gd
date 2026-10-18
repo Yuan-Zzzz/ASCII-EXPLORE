@@ -26,7 +26,6 @@ const PRESENTATION_KEYS := [
 	"u_dither",
 	"u_dither_pixel_size",
 	"u_dither_color_levels",
-	"u_ascii_bg",
 	"u_glow_energy",
 ]
 
@@ -237,7 +236,6 @@ func _apply_presentation() -> void:
 	_lens_material.set_shader_parameter("u_dither_color_levels", dither_color_levels)
 	_lens_material.set_shader_parameter("u_glyph_px", glyph_px)
 	_lens_material.set_shader_parameter("u_glow_energy", glow_energy)
-	_lens_material.set_shader_parameter("u_ascii_bg", Vector3(0.01, 0.012, 0.02))
 	if ramp != null and ramp.atlas != null:
 		_lens_material.set_shader_parameter("u_atlas", ramp.atlas)
 		_lens_material.set_shader_parameter("u_char_count", ramp.char_count)
