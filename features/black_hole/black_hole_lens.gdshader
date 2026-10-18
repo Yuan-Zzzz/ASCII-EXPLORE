@@ -210,20 +210,6 @@ vec3 disk_color(vec3 point, vec3 center, float radius, float g_shift) {
 	return mix(u_color_inner.rgb, u_color_outer.rgb, t) * energy;
 }
 
-float hash21(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-}
-
-// Procedural stars in lensed UV space so an empty WorldEnvironment still shows deflection.
-vec3 starfield(vec2 uv) {
-	vec2 cell = floor(uv * 110.0);
-	float n = hash21(cell);
-	float keep = step(0.992, n);
-	float spark = pow(hash21(cell + 19.7), 10.0);
-	float twinkle = 0.65 + 0.35 * sin(u_time * 6.0 + n * 40.0);
-	return vec3(0.72, 0.84, 1.0) * keep * spark * twinkle * 3.2;
-}
-
 // Solid glyph stroke plus a soft fringe from the same atlas cell.
 // The lens uses screen_texture so it stays in the transparent pass; Environment
 // glow often ignores that pass, so the fringe is baked into the color the glyph emits.
@@ -552,10 +538,6 @@ void fragment() {
 			src.x /= aspect;
 			vec2 sample_uv = clamp(bh_uv + src, vec2(0.001), vec2(0.999));
 			vec3 background = texture(screen_texture, sample_uv).rgb;
-			// Empty near-black sky: inject stars in the deflected UV so lensing is visible.
-			float sky_lum = dot(background, vec3(0.299, 0.587, 0.114));
-			vec2 star_uv = (delta * scale) * 0.55 + vec2(u_disk_phase * 0.02, u_time * 0.01);
-			background += starfield(star_uv) * mix(1.0, 0.25, smoothstep(0.02, 0.12, sky_lum));
 			float los = ring_los(b_vec);
 			float g_shift = redshift_g(u_disk_inner, los);
 			float falloff = exp(-pow((b - u_b_crit) / max(u_photon_sigma, 0.0001), 2.0));
