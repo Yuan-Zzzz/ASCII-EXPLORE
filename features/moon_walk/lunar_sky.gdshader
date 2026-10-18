@@ -1,10 +1,7 @@
 shader_type sky;
 
-// The player camera, MoonLens screen_texture, Earth and Sun shells, and the shot tools read this background.
-// This file is the only star writer. Leave the lens without a starfield.
-
 const float GRID = 64.0;
-const float KEEP_ABOVE = 0.997;
+const float STAR_CELL_CUTOFF = 0.997;
 const float DISK_RADIUS = 0.20;
 
 float hash(vec3 cell_id) {
@@ -34,7 +31,7 @@ void sky() {
 	}
 
 	vec2 cell = floor(uv * GRID);
-	float keep = step(KEEP_ABOVE, hash(vec3(cell, face)));
+	float keep = step(STAR_CELL_CUTOFF, hash(vec3(cell, face)));
 	float star_mask = keep * step(length(fract(uv * GRID) - 0.5), DISK_RADIUS);
 	COLOR = vec3(0.62, 0.72, 0.84) * 0.15 * star_mask;
 }
