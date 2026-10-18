@@ -1,6 +1,4 @@
 extends RefCounted
-## No class_name: BlackHoleOptics stays the only optics entry point.
-## Host is Node3D so this file can preload without cycling through black_hole.gd.
 
 const _EDITOR_STEP := 0.016
 
@@ -15,19 +13,26 @@ func attach(host: Node3D) -> void:
 	_host = host
 
 
-## Connect next before dropping _bound so a failure between the two still has a listener.
 func bind(next: BlackHoleOptics) -> void:
 	if _host == null:
 		return
 	if next == _bound and (next == null or next.changed.is_connected(_host._upload)):
 		return
-	if next != null and not next.changed.is_connected(_host._upload):
-		next.changed.connect(_host._upload)
-	if _bound != null and _bound != next and _bound.changed.is_connected(_host._upload):
-		_bound.changed.disconnect(_host._upload)
+	_connect_upload(next)
+	_disconnect_upload(_bound if _bound != next else null)
 	_bound = next
 	if next != null and _host.is_inside_tree():
 		_host._upload()
+
+
+func _connect_upload(optics: BlackHoleOptics) -> void:
+	if optics != null and not optics.changed.is_connected(_host._upload):
+		optics.changed.connect(_host._upload)
+
+
+func _disconnect_upload(optics: BlackHoleOptics) -> void:
+	if optics != null and optics.changed.is_connected(_host._upload):
+		optics.changed.disconnect(_host._upload)
 
 
 func tick(delta: float) -> void:
@@ -56,12 +61,11 @@ func frame_black_hole() -> Transform3D:
 	return pose
 
 
-## Dividing by MAX_RADIUS_OVER_DISTANCE puts the eye on the sky-lens angular cap.
 static func _camera_pose(target: Vector3, disk_normal: Vector3, lens_radius: float) -> Transform3D:
-	if lens_radius <= 0.0:
+	var distance := BlackHoleOptics.frame_eye_distance(lens_radius)
+	if distance <= 0.0:
 		push_error("BlackHole frame needs a positive lens radius")
 		return Transform3D()
-	var distance := lens_radius / BlackHoleOptics.MAX_RADIUS_OVER_DISTANCE
 	var normal := disk_normal.normalized()
 	var eye := target + normal * distance
 	var up := Vector3.UP

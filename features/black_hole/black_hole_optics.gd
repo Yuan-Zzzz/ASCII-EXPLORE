@@ -202,6 +202,12 @@ func lens_radius() -> float:
 	return LENS_SHADOW_MULTIPLE * shadow_radius()
 
 
+static func frame_eye_distance(lens_radius: float) -> float:
+	if lens_radius <= 0.0:
+		return 0.0
+	return lens_radius / MAX_RADIUS_OVER_DISTANCE
+
+
 func node_axis() -> Vector3:
 	return disk_normal().cross(Vector3.UP).normalized()
 
