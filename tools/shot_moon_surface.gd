@@ -1,7 +1,7 @@
 extends SceneTree
 ## GPU shot of the moon surface from the player camera. Usage:
 ##   godot --path . --script res://tools/shot_moon_surface.gd
-## Writes res://moon_shot.png (default view) and res://moon_shot_side.png.
+## Writes moon_shot.png and moon_shot_sky.png at the project root.
 
 const TAG := "MOON_SHOT"
 

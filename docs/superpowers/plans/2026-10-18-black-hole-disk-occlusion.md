@@ -77,7 +77,7 @@ git commit -m "test(moon_walk): assert far disk does not fill the shadow"
 ### Task 2: Fix `BlackHoleOptics._pick_disk`
 
 **Files:**
-- Modify: `features/moon_walk/black_hole_optics.gd` (`_pick_disk`, add `_disk_is_near`)
+- Modify: `features/black_hole/black_hole_optics.gd` (`_pick_disk`, add `_disk_is_near`)
 
 - [ ] **Step 1: Implement near-side helper and pick order**
 
@@ -117,7 +117,7 @@ Expected: `OPTICS_OK`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add features/moon_walk/black_hole_optics.gd
+git add features/black_hole/black_hole_optics.gd
 git commit -m "fix(moon_walk): keep far-side disk out of the critical shadow"
 ```
 
@@ -126,7 +126,7 @@ git commit -m "fix(moon_walk): keep far-side disk out of the critical shadow"
 ### Task 3: Mirror pick order in the lens shader
 
 **Files:**
-- Modify: `features/moon_walk/black_hole_lens.gdshader` (helpers + main disk branch ~502–531)
+- Modify: `features/black_hole/black_hole_lens.gdshader` (helpers + main disk branch ~502–531)
 
 - [ ] **Step 1: Add `disk_is_near` and reorder disk selection**
 
@@ -154,7 +154,7 @@ Expected: both print `*_OK` (or project's existing success tags).
 - [ ] **Step 3: Commit**
 
 ```bash
-git add features/moon_walk/black_hole_lens.gdshader
+git add features/black_hole/black_hole_lens.gdshader
 git commit -m "fix(moon_walk): match lens disk occlusion to optics pick order"
 ```
 

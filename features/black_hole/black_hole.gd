@@ -1,31 +1,20 @@
 @tool
 class_name BlackHole
 extends Node3D
-## SkyPivot 下的远景。原点是黑洞中心。basis 不参与盘面。
-## 唯一的 ShaderMaterial 写入者。不进入宿主三元组，不创建 GlyphField。
-## 盘自旋与 ASCII/Bayer 在透镜着色器里完成，跟 MoonWalk 的表面模式对齐。
 
-const LENS_SHADER := preload("res://features/moon_walk/black_hole_lens.gdshader")
-const BILLBOARD_SHADER := preload("res://features/ascii/glyph_billboard.gdshader")
+const LENS_SHADER := preload("res://features/black_hole/black_hole_lens.gdshader")
 const DEFAULT_RAMP := preload("res://features/ascii/ascii_ramp.tres")
 const _LENS_NAME := "Lens"
 const _MOON_LENS_NAME := "MoonLens"
 const _LIGHT_NAME := "DiskLight"
-## 光照张角相对事件视界张角的倍数：真实值是 1，稍微放宽让明暗分界落在看得见的地面上。
+## Spot cone vs event-horizon angular size. 1 is physical; >1 softens the lit/unlit ground seam.
 const _light_spread := 1.6
-## 从月面看黑洞时，天空天体铺到无限远球壳上的槽位数。
 const SKY_SLOTS := 2
-## MoonWalk 在根节点上把要被黑洞照亮的字段加进这个组。
-const LIT_GROUP := &"black_hole_lit"
-## 无限远天空的等效半径：从月面看黑洞时，远处天体按高度角铺在这个球面上供透镜取样。
 const _SKY_RADIUS := 90000.0
-## 透镜渲染层（与 MoonWalk.LENS_LAYER 一致）：只有天空、黑洞和 Lens 在这个层上，
-## 所以从月面看黑洞时，透镜取到的是“没有月亮”的天空，把月亮留给自己画。
+## Matches MoonWalk.LENS_LAYER so the lunar lens samples sky without the moon mesh.
 const _LENS_LAYER := 10
-## 透镜在屏幕上小于这个像素数时不画（含了 ASDF）。
 const _MIN_LENS_PX := 2.0
 
-## Extra shader keys outside BlackHoleOptics.uniform_block().
 const PRESENTATION_KEYS := [
 	"u_time",
 	"u_disk_phase",
@@ -40,7 +29,6 @@ const PRESENTATION_KEYS := [
 	"u_glow_energy",
 ]
 
-## Keys used only by the moon-side lens (same shader, observer on the moon surface).
 const LUNAR_KEYS := [
 	"u_view_frame",
 	"u_occlude",
@@ -77,22 +65,15 @@ const LUNAR_KEYS := [
 @export var animate: bool = true
 @export_range(0.0, 4.0, 0.01) var spin_speed: float = 0.55
 @export var glyph_px: float = 14.0
-## 吸积盘与光子环的辉光强度。事件视界内始终为 0，不参与发光。
-## 辉光会在 present() 之前合入，因此要补偿 ASCII / 抖动前的色调映射。
+@export var moon_path: NodePath = ^"../../Moon"
+@export var observer_path: NodePath = ^"../../Player/Camera3D"
+@export var sun_path: NodePath = ^"../SunHost"
+@export var sky_body_paths: Array[NodePath] = [^"../Earth", ^"../SunHost"]
 @export_range(0.0, 2.0, 0.01) var glow_energy: float = 1.2
-## 盘面照射月面的光强。黑洞本身不发光，照亮月面的是吸积盘（含光子环）。
-## 颜色取盘面自己的 COLOR_INNER；0 关闭，回到只有太阳光的画面。
 @export_range(0.0, 4.0, 0.01) var light_energy: float = 1.2
-## 从月面看黑洞时，盘面光束沿视线深浅的比例（1 = 盘面与月面同侧）。
 @export_range(0.0, 2.0, 0.01) var light_falloff_power: float = 1.0
-## 盘面相对月面的朝向：从月心指向黑洞再绕地球轴偏转的角度。
-## 从月面看黑洞时，这个方向就是星空的像素相位——盘在本侧更亮、对侧更暗。
 @export_range(0.0, 180.0, 1.0) var light_tilt_degrees: float = 62.0
-## 从月面看黑洞时保留的光子环亮度比例。透镜里的世界是约 2 倍距里的“迷你”天空，
-## 环的角宽度不能被线性拉伸，所以这里单独给环的强度。
 @export_range(0.0, 4.0, 0.01) var ring_energy: float = 1.0
-## 字面意义上的光子环：盘面在光子球附近绕黑洞一圈的像在月面上的亮度。
-## 它比整个盘打过来的光窄得多，作为月面的那圈亮环。
 @export_range(0.0, 2.0, 0.01) var ring_glint: float = 0.0
 
 var _lens_material: ShaderMaterial
@@ -109,7 +90,6 @@ func _ready() -> void:
 	if not basis.is_equal_approx(Basis.IDENTITY):
 		push_error("BlackHole basis is ignored; disk orientation comes from optics")
 		basis = Basis.IDENTITY
-	# 透镜渲染层：只有天空、黑洞和 Lens 在这一层上。
 	for child in get_children():
 		var visual := child as VisualInstance3D
 		if visual != null:
@@ -131,14 +111,12 @@ func _process(delta: float) -> void:
 			_time += 0.016
 			_disk_phase = wrapf(_disk_phase + spin_speed * 0.016, 0.0, TAU)
 			_apply_presentation()
-		# 编辑器里也摆好光源的位置与角度，3D 视口能看到黑洞照在月面上的明暗。
 		_publish_light()
 		return
 	if animate:
 		_time += delta
 		_disk_phase = wrapf(_disk_phase + spin_speed * delta, 0.0, TAU)
 	_apply_presentation()
-	# 光源跟着黑洞走：轨道运动把黑洞拉远拉近时，张角与距离一起更新。
 	_publish_light()
 	_publish_moon_view()
 
@@ -226,16 +204,6 @@ func _apply_presentation() -> void:
 		_lens_material.set_shader_parameter("u_char_count", 10)
 
 
-func presentation_block() -> Dictionary:
-	## Keys allowed on the lens besides optics.uniform_block().
-	var out := {}
-	if _lens_material == null:
-		return out
-	for key in PRESENTATION_KEYS:
-		out[key] = _lens_material.get_shader_parameter(key)
-	return out
-
-
 func uniform_snapshot() -> Dictionary:
 	var snap := {}
 	if _lens_material == null or optics == null:
@@ -250,21 +218,15 @@ func lens_material() -> ShaderMaterial:
 	return _lens_material
 
 
-# ---------------------------------------------------------------- 黑洞作为光源
-
-## 黑洞作为一盏真实光源：SpotLight3D 放在黑洞上、照向月心，张角等于事件视界在月面上的
-## 大小（月面距离下约 2.6°，乘 _light_spread 后约 4°）。Godot 原生光照把它叠到月面字符上，
-## 所以朝黑洞的地面被盘面照亮，背向的地面只剩环境光。
 func _publish_light() -> void:
 	if light_energy <= 0.0:
 		if _light != null:
 			_light.visible = false
 		return
-	var moon := _scene_node("Moon")
+	var moon := _resolve(moon_path)
 	if moon == null or optics == null:
 		return
-	# 编辑器里 optics 可能短暂是占位实例（脚本热重载 / LSP 竞态）：导出字段仍可读，
-	# 实例方法会每帧报错。阴影半径与颜色走类 API + rs，避免 shadow_radius() 刷屏。
+	# Editor may briefly hold a placeholder optics instance during script reload.
 	var shadow := BlackHoleOptics.shadow_per_rs() * optics.rs
 	if shadow <= 0.0:
 		return
@@ -299,8 +261,6 @@ func light_source() -> SpotLight3D:
 	return _light
 
 
-## 盘面相对月面的朝向：从月心指向黑洞，再绕地球轴转 light_tilt_degrees。
-## 从月面看黑洞时，这个方向就是星空的像素相位——盘在本侧更亮、对侧更暗。
 func light_direction(_frame: Basis) -> Vector3:
 	var base := (-global_position).normalized()
 	if base.length_squared() < 1.0e-6:
@@ -308,10 +268,8 @@ func light_direction(_frame: Basis) -> Vector3:
 	return base.rotated(Vector3.UP, deg_to_rad(light_tilt_degrees)).normalized()
 
 
-## 日光方向在盘法线上的投影。太阳正好在黑洞背后时接近 -1：
-## 从月面看黑洞时，星空的暗侧落在太阳背后，本影与星空一致。
 func _sun_cos(disk_direction: Vector3, observer: Vector3) -> float:
-	var sun := _scene_node("SkyPivot/SunHost")
+	var sun := _resolve(sun_path)
 	if sun == null:
 		return 1.0
 	var to_sun := sun.global_position - observer
@@ -320,24 +278,20 @@ func _sun_cos(disk_direction: Vector3, observer: Vector3) -> float:
 	return clampf(to_sun.normalized().dot(disk_direction), -1.0, 1.0)
 
 
-## 观测点：玩家相机。编辑器里它停在出生点，等价于站在月面上。
 func _moon_anchor() -> Node3D:
-	return _scene_node("Player/Camera3D")
+	return _resolve(observer_path)
 
 
-func _scene_node(path: String) -> Node3D:
-	var base: Node = owner if owner != null else self
-	var node := base.get_node_or_null(path) as Node3D
-	if node == null:
-		node = get_node_or_null(path) as Node3D
-	return node
+func _resolve(path: NodePath) -> Node3D:
+	if path.is_empty():
+		return null
+	return get_node_or_null(path) as Node3D
 
 
-## 天空里要铺到球壳上的天体：地球和太阳。月亮留在原地，由 SDF 追迹。
 func sky_bodies(observer: Vector3) -> Array:
 	var out := []
-	for path in ["SkyPivot/Earth", "SkyPivot/SunHost", "SkyPivot/BlackHole"]:
-		var node := _scene_node(path)
+	for path in sky_body_paths:
+		var node := _resolve(path)
 		if node == null or node == self:
 			continue
 		var body := node as MeshInstance3D
@@ -364,8 +318,6 @@ static func _body_radius(body: MeshInstance3D) -> float:
 	return aabb.size.length() * 0.5
 
 
-## 从月面看黑洞：天空天体按高度角铺到远处的球壳上，再用同一份透镜着色器画一遍。
-## 透镜把月亮“看见”的天空重新投回屏幕，月亮本身仍由月面字符绘制。
 func _publish_moon_view() -> void:
 	if optics == null or not optics.consistent():
 		return
@@ -374,11 +326,10 @@ func _publish_moon_view() -> void:
 			_moon_lens.visible = false
 		return
 	var camera := _moon_anchor() as Camera3D
-	var moon := _scene_node("Moon")
+	var moon := _resolve(moon_path)
 	if camera == null or moon == null:
 		return
 	_ensure_moon_lens()
-	# 只在视锥里真的能看到黑洞时忙碌：其余时间透镜不可见，也不上传。
 	var inside := camera.is_position_in_frustum(global_position)
 	var radius := optics.shadow_radius()
 	var focal := (camera.get_viewport().get_visible_rect().size.y * 0.5) / tan(deg_to_rad(camera.fov) * 0.5)
@@ -410,10 +361,8 @@ func _publish_moon_view() -> void:
 	view.set_shader_parameter("u_occluder_center", Vector3.ZERO)
 	view.set_shader_parameter("u_occluder_radius", moon_radius)
 	view.set_shader_parameter("u_lens_radius", _SKY_RADIUS * scale)
-	# 盘面照在月面上的颜色与形状：近侧亮、远侧暗，中心是盘的投影。
 	var state := optics.beam_state(Vector3.ZERO, false)
 	var direction := light_direction(frame)
-	# 盘面相对“月面朝向黑洞的那一点”的侧倾角：盘上是月面，所以这就是盘的视角倾角。
 	var moon_face := (-global_position).normalized()
 	var slant := clampf(direction.dot(moon_face), -1.0, 1.0)
 	var cover := absf(acos(slant))
@@ -460,8 +409,7 @@ func moon_lens() -> MeshInstance3D:
 	return _moon_lens
 
 
-## 透镜里使用的世界尺度。天空天体按高度角铺在远离相机的球壳上，月亮留在原地；
-## 尺度只是把球壳推到视野之外，不改变黑洞在屏幕上的角半径（由 u_lens_radius 按比例给出）。
+## Sky-shell scale only. Screen angle stays on u_lens_radius.
 func _lens_world_scale(shadow_radius: float, _camera: Camera3D, _radius_px: float) -> float:
 	return maxf(4.0, _SKY_RADIUS / maxf(shadow_radius, 1.0) * 0.02)
 

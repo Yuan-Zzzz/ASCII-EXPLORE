@@ -1,5 +1,6 @@
 extends PanelContainer
-## Runtime controls for the moon surface glyph field.
+
+@export var field_path: NodePath = ^"../../Moon/MoonMesh/GlyphField"
 
 var _field: GlyphField
 var _base_spacing: float
@@ -10,7 +11,7 @@ var _timer: Timer
 
 
 func _ready() -> void:
-	_field = get_node("../../Moon/MoonMesh/GlyphField") as GlyphField
+	_field = get_node(field_path) as GlyphField
 	_base_spacing = _field.spacing
 	position = Vector2(16, 64)
 	custom_minimum_size = Vector2(310, 0)
@@ -66,7 +67,6 @@ func _queue_density(_value: float) -> void:
 
 
 func _apply_density() -> void:
-	# Surface sample count scales approximately with 1 / spacing squared.
 	_field.spacing = _base_spacing / sqrt(_density.value)
 	_field.rebuild()
 	_update_density_label(true)

@@ -1,29 +1,38 @@
 # ASCII-EXPLORE
 
-Godot 4.7 演示：把网格表面渲染成 ASCII 字符点。
+Godot 4.7 project. Surfaces render as ASCII glyphs. Main play scene is a walkable moon under an orbital sky.
 
-## 目录
+## Layout
 
-| 路径 | 职责 |
+| Path | Role |
 |------|------|
-| `scenes/` | 组合根（演示场景 + 控制器） |
-| `features/ascii/` | 字形映射功能包（脚本、着色器、阶梯资源、图集） |
-| `tools/` | 离线工具，不进运行时 |
-| `addons/` | 编辑器插件（Godot 约定位置） |
-| `ascii_shot.png` | 运行时截图输出（`--shot`），已 gitignore，不是源文件 |
-| `project.godot` / `icon.svg` | 引擎配置 |
+| `scenes/` | Composition roots only (`moon_walk.tscn`, demos) |
+| `features/ascii/` | Glyph sampling, MultiMesh fields, ramp atlas |
+| `features/black_hole/` | Disk optics, lens shader, disk light |
+| `features/moon_walk/` | Player, terrain, orbits, sun corona, HUD controls |
+| `features/dither/` | Bayer model overlay |
+| `tools/` | Headless smoke, benches, bake scripts (not shipped) |
+| `addons/` | Editor plugins |
 
-新增运行时功能放到 `features/<name>/`。新增组合场景放到 `scenes/`。
+Add a reusable system under `features/<name>/`. Wire it in `scenes/`. Keep content-specific scripts next to the feature that owns them.
 
-## 运行
+## Run
 
 ```bash
 godot --path .
-godot --path . -- --shot   # 写出 ascii_shot.png 后退出
+godot --path . -- --shot
 ```
 
-重生成字符图集：
+Regenerate the glyph atlas:
 
 ```bash
 python3 tools/generate_ramp_atlas.py
+```
+
+## Smoke
+
+```bash
+godot --path . --headless --script res://tools/smoke_moon_walk.gd
+godot --path . --headless --script res://tools/smoke_black_hole.gd
+godot --path . --headless --script res://tools/test_orbital_motion.gd
 ```

@@ -1,7 +1,7 @@
 class_name MoonFpsController
 extends CharacterBody3D
 
-## 每帧以球心求当地上方向，实际地面高度由地形碰撞决定。
+## Ground height comes from terrain collision, not this frame.
 class WorldFrame:
 	var center: Vector3 = Vector3.ZERO
 
@@ -45,7 +45,6 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# 月球在星系轨道里移动；当地上方向必须跟着月心更新。
 	if _body != null:
 		_frame.center = _body.global_position
 	var up := _frame.up_at(global_position)

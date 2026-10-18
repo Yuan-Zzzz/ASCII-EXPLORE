@@ -43,8 +43,8 @@ near = dot(hit - center, camera - center) > 0
 
 | 文件 | 改动 |
 |------|------|
-| `features/moon_walk/black_hole_lens.gdshader` | 盘命中逻辑按上面 1–4 重排；一次像增加近侧过滤；二次像保持 `b > u_b_crit`；有盘着色前若仅远侧且 `b ≤ u_b_crit` 则不得着色。 |
-| `features/moon_walk/black_hole_optics.gd` | `_pick_disk` 与 shader 同一优先级与近侧判定，保证 `trace()` / 测试与画面一致。 |
+| `features/black_hole/black_hole_lens.gdshader` | 盘命中逻辑按上面 1–4 重排；一次像增加近侧过滤；二次像保持 `b > u_b_crit`；有盘着色前若仅远侧且 `b ≤ u_b_crit` 则不得着色。 |
+| `features/black_hole/black_hole_optics.gd` | `_pick_disk` 与 shader 同一优先级与近侧判定，保证 `trace()` / 测试与画面一致。 |
 | `tools/test_black_hole_optics.gd`（及必要时 smoke） | 增加回归：`b ≤ b_crit` 的远侧一次像不得返回盘命中；近侧前景带仍可命中；`b` 略大于 `b_crit` 时二次像仍可命中远侧。 |
 
 不改：`BlackHoleOptics` 的导出参数语义、`present()` / ASCII / Bayer、月面 `DiskLight` 几何（除非 optics 命中变化导致测试断言需同步）。

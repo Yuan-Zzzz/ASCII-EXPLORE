@@ -18,6 +18,12 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 @export var dither_enabled: bool = false
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
+## Host is a light source. Depth shell becomes HDR emissive core; glyph Bayer overlay stays off.
+@export var emissive_body: bool = false
+## Bayer model overlay multiplies the undithered lit frame by this weight (1 on the primary lit body).
+@export_range(0.0, 1.0, 0.05) var dither_lit_weight: float = 0.0
+## Drop the host mesh from the black-hole lens cull mask so the lens samples sky without this body.
+@export var hide_from_lens: bool = false
 @export var rebuild_on_ready: bool = true:
 	set(value):
 		rebuild_on_ready = value

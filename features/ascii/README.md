@@ -36,7 +36,7 @@ index = clamp(int(lum * N), 0, N-1)
 | `glyph_billboard.gdshader` | 字符 billboard | 功能包内部 |
 | `ascii_post.gdshader` | 可选全屏后处理 | 场景可引用 |
 
-场景侧只应引用：`glyph_field.gd`、`ascii_ramp.tres`、`ascii_post.gdshader`。
+主玩法场景引用 `glyph_field.gd` 与 `ascii_ramp.tres`。全屏 `ascii_post.gdshader` 只给 `scenes/main.tscn` 演示用。
 
 导出 PCK 时排除 `tools/`（当前尚无 `export_presets.cfg`）。
 

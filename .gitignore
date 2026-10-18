@@ -16,3 +16,5 @@ lab_*.png
 lab_*.png.import
 # Local decision trail (figure-it-out / show-me-your-work)
 .audit/
+# Ad-hoc test / bench logs at repo root
+*.log

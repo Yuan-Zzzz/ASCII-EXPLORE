@@ -1,6 +1,6 @@
 extends SceneTree
 
-const OpticsScript = preload("res://features/moon_walk/black_hole_optics.gd")
+const OpticsScript = preload("res://features/black_hole/black_hole_optics.gd")
 
 
 func _initialize() -> void:

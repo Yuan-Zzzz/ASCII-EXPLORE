@@ -30,7 +30,8 @@ func _run() -> void:
 	var material := main.get_node("Moon/MoonMesh").material_overlay as ShaderMaterial
 	assert(material != null)
 	assert(is_equal_approx(material.get_shader_parameter("u_pixel_size"), 3.0))
-	assert(main.sun_light.shadow_enabled, "Native shadows must be enabled")
+	var sun_light := main.get_node("SkyPivot/SunHost/SunLight") as DirectionalLight3D
+	assert(sun_light.shadow_enabled, "Native shadows must be enabled")
 	print("MODEL_DITHER_OK: model materials, glyph visibility, mode switching, parameters and lighting")
 	quit()
 
