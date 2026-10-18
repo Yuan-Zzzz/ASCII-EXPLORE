@@ -33,6 +33,30 @@ func _run() -> void:
 	assert(float(lens_material.get_shader_parameter("u_lens_radius")) > 0.0, "Editor lens needs a viewport-sized radius")
 	assert(float(lens_material.get_shader_parameter("u_ascii")) == 1.0, "Editor lens must show ASCII by default")
 	assert(float(lens_material.get_shader_parameter("u_dither")) == 1.0, "Editor lens must show dither by default")
+	black_hole.animate = false
+	black_hole.glow_energy = 0.25
+	await process_frame
+	assert(is_equal_approx(float(lens_material.get_shader_parameter("u_glow_energy")), 0.25), "glow_energy must upload while animate is off")
+	var optics: BlackHoleOptics = black_hole.optics
+	optics.rs = 90.0
+	await process_frame
+	assert(is_equal_approx(float(lens_material.get_shader_parameter("u_b_crit")), optics.shadow_radius()), "in-place rs must update u_b_crit")
+	var retired := optics
+	var replacement := BlackHoleOptics.new()
+	replacement.rs = 40.0
+	black_hole.optics = replacement
+	await process_frame
+	retired.rs = 200.0
+	await process_frame
+	assert(is_equal_approx(float(lens_material.get_shader_parameter("u_b_crit")), replacement.shadow_radius()), "lens must follow the replacement optics")
+	var host_position: Vector3 = black_hole.global_position
+	var pose: Transform3D = black_hole.frame_black_hole()
+	assert(black_hole.global_position.is_equal_approx(host_position), "frame must not move the black hole")
+	var offset := pose.origin - host_position
+	var expected_distance := replacement.lens_radius() / BlackHoleOptics.MAX_RADIUS_OVER_DISTANCE
+	assert(is_equal_approx(offset.length(), expected_distance), "frame distance must match the lens angular cap")
+	assert(offset.normalized().dot(replacement.disk_normal()) > 0.999, "frame offset must lie along the disk normal")
+	assert((-pose.basis.z).normalized().dot((host_position - pose.origin).normalized()) > 0.999, "frame camera must face the black hole")
 	var depth := scene.get_node("Moon/MoonMesh").material_override as StandardMaterial3D
 	assert(depth.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED)
 	field.spacing *= 1.5
