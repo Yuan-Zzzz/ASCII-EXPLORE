@@ -21,7 +21,7 @@ WASD 移动。鼠标转向。空格跳。Shift 冲刺。第一次按 Esc 放开�
 - `MoonWalk` 控制表面渲染模式、抖动和太阳自发光。
 - `Orbits` 驱动天空轨道。`Moon` 保持不动，天空整体反向平移。
 - `SkyPivot/Earth`、`SkyPivot/SunHost`、`SkyPivot/BlackHole` 是天空天体。
-- `SkyPivot/SunHost/SunLight` 照向月球。`SkyPivot/SunHost/Corona` 是日冕。
+- `SkyPivot/SunHost/SunLight` 照向月球。`SkyPivot/SunHost/Corona` 只在 Bayer Model 模式显示；ASCII 模式的辉光来自太阳 GlyphField 笔画。
 - `Moon` 是地形。`Moon/MoonMesh/GlyphField` 是月面字符。
 - `Player/Camera3D` 是行走角色。
 

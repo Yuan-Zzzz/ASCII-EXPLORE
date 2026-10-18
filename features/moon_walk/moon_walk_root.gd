@@ -88,11 +88,17 @@ func _apply_depth_hosts() -> void:
 		material.roughness = 1.0
 		if field.emissive_body:
 			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			material.albedo_color = _emissive_core_color(field.tint)
-			material.emission_enabled = true
-			material.emission = field.tint
-			material.emission_energy_multiplier = sun_core_energy
 			host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			# ASCII modes: dark shell so only glyph strokes light the sun (like BlackHole).
+			# Bayer model keeps the smooth emissive core.
+			if surface_render_mode == 1:
+				material.albedo_color = _emissive_core_color(field.tint)
+				material.emission_enabled = true
+				material.emission = field.tint
+				material.emission_energy_multiplier = sun_core_energy
+			else:
+				material.albedo_color = Color(0.01, 0.012, 0.02)
+				material.emission_enabled = false
 		else:
 			if surface_render_mode != 1:
 				material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -104,6 +110,15 @@ func _apply_depth_hosts() -> void:
 			var overlay := ShaderMaterial.new()
 			overlay.shader = ModelDitherShader
 			host.material_overlay = overlay
+	_sync_sun_corona()
+
+
+func _sync_sun_corona() -> void:
+	var corona := get_node_or_null("SkyPivot/SunHost/Corona") as VisualInstance3D
+	if corona == null:
+		return
+	# Soft corona only with Bayer model; ASCII modes glow from glyph strokes.
+	corona.visible = surface_render_mode == 1
 
 
 func _emissive_core_color(tint: Color) -> Color:

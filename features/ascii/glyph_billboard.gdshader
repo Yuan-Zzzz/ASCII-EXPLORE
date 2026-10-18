@@ -65,9 +65,36 @@ void fragment() {
 	float du = 1.0 / float(nchars);
 	vec2 atlas_uv = vec2((v_idx + v_local.x) * du, v_local.y);
 	float mask = texture(u_atlas, atlas_uv).r;
-	if (mask < 0.28) {
-		discard;
+	float energy = max(u_emission_energy, 0.0);
+	if (energy <= 0.001) {
+		if (mask < 0.28) {
+			discard;
+		}
+		ALBEDO = v_color * smoothstep(0.28, 0.75, mask);
+		EMISSION = vec3(0.0);
+	} else {
+		// Same cell as the stroke: soft fringe so the character emits glow (sun / BH path).
+		float glow_mask = 0.0;
+		for (int oy = -2; oy <= 2; oy++) {
+			for (int ox = -2; ox <= 2; ox++) {
+				vec2 o = v_local + vec2(float(ox), float(oy)) * 0.16;
+				if (o.x < 0.0 || o.x > 1.0 || o.y < 0.0 || o.y > 1.0) {
+					continue;
+				}
+				float m = textureLod(u_atlas, vec2((v_idx + o.x) * du, o.y), 0.0).r;
+				float w = exp(-0.5 * float(ox * ox + oy * oy));
+				glow_mask += m * w;
+			}
+		}
+		vec3 stroke = vec3(0.0);
+		if (mask >= 0.28) {
+			stroke = v_color * smoothstep(0.28, 0.75, mask);
+		} else if (glow_mask < 0.04) {
+			discard;
+		}
+		vec3 glow = v_color * glow_mask * 0.28 * energy;
+		vec3 shown = stroke * (1.0 + 0.85 * energy) + glow;
+		ALBEDO = shown;
+		EMISSION = shown;
 	}
-	ALBEDO = v_color * smoothstep(0.28, 0.75, mask);
-	EMISSION = ALBEDO * u_emission_energy;
 }
