@@ -47,7 +47,7 @@ uniform vec3 u_sky_height_0 = vec3(0.0);
 uniform vec3 u_sky_height_1 = vec3(0.0);
 uniform float u_sky_radius_0 = 0.0;
 uniform float u_sky_radius_1 = 0.0;
-// 盘面照射月面的光：颜色和形状与 accretion_glow() 一致。
+// 盘面照射月面的光（CPU beam_state / COLOR_INNER 一侧）。
 uniform float u_beam_lit = 0.0;
 uniform vec3 u_beam_energy = vec3(0.0);
 uniform vec3 u_beam_inner = vec3(1.0, 0.82, 0.55);
@@ -224,9 +224,11 @@ vec3 starfield(vec2 uv) {
 	return vec3(0.72, 0.84, 1.0) * keep * spark * twinkle * 3.2;
 }
 
+// Solid glyph stroke plus a soft fringe from the same atlas cell.
+// The lens uses screen_texture so it stays in the transparent pass; Environment
+// glow often ignores that pass, so the fringe is baked into the color the glyph emits.
 vec3 apply_ascii(vec3 col, vec2 frag_xy) {
 	float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
-	// Event horizon stays pure black; do not lift it to the near-black shell color.
 	if (lum < 0.02) {
 		return vec3(0.0);
 	}
@@ -234,18 +236,30 @@ vec3 apply_ascii(vec3 col, vec2 frag_xy) {
 	vec2 local = fract(frag_xy / cell);
 	int n = max(u_char_count, 1);
 	int idx = clamp(int(lum * float(n)), 0, n - 1);
-	// Match GlyphField: skip the space cell so dark areas do not paint a solid floor.
 	if (idx == 0) {
 		idx = 1;
 	}
 	float du = 1.0 / float(n);
 	vec2 atlas_uv = vec2((float(idx) + local.x) * du, local.y);
 	float mask = textureLod(u_atlas, atlas_uv, 0.0).r;
-	// Match GlyphField: only the glyph stroke is lit; gaps stay black.
-	if (mask < 0.28) {
-		return vec3(0.0);
+	vec3 stroke = vec3(0.0);
+	if (mask >= 0.28) {
+		stroke = col * smoothstep(0.28, 0.75, mask);
 	}
-	return col * smoothstep(0.28, 0.75, mask);
+	float glow_mask = 0.0;
+	for (int oy = -2; oy <= 2; oy++) {
+		for (int ox = -2; ox <= 2; ox++) {
+			vec2 o = local + vec2(float(ox), float(oy)) * 0.16;
+			if (o.x < 0.0 || o.x > 1.0 || o.y < 0.0 || o.y > 1.0) {
+				continue;
+			}
+			float m = textureLod(u_atlas, vec2((float(idx) + o.x) * du, o.y), 0.0).r;
+			float w = exp(-0.5 * float(ox * ox + oy * oy));
+			glow_mask += m * w;
+		}
+	}
+	vec3 glow = col * glow_mask * 0.28 * max(u_glow_energy, 0.0);
+	return stroke * (1.0 + 0.85 * max(u_glow_energy, 0.0)) + glow;
 }
 
 vec3 apply_bayer(vec3 col, vec2 frag_xy) {
@@ -255,37 +269,19 @@ vec3 apply_bayer(vec3 col, vec2 frag_xy) {
 	return clamp(floor(clamp(col, 0.0, 1.0) * steps + threshold) / steps, 0.0, 1.0);
 }
 
-// 黑洞本身不发光：辉光只来自吸积盘和光子环。
-// b <= b_crit 时返回 0，事件视界保持纯黑；外侧按光子环高斯衰减，
-// 并用与盘相同的多普勒 + 引力红移 g^4 调制亮度（接近侧更亮）。
-vec3 accretion_glow(float b, vec3 b_vec) {
-	if (b <= u_b_crit) {
-		return vec3(0.0);
-	}
-	float outside = b - u_b_crit;
-	float ring_halo = exp(-pow(outside / max(u_b_crit * 1.15, 0.001), 2.0));
-	float outer_halo = exp(-pow(outside / max(u_b_crit * 3.2, 0.001), 2.0));
-	float los = ring_los(b_vec);
-	float g_shift = redshift_g(u_disk_inner, los);
-	float beaming = pow(max(g_shift, 0.2), 4.0);
-	float shape = ring_halo + 0.18 * outer_halo;
-	return u_color_inner.rgb * u_emissivity_peak * beaming * shape;
-}
-
 vec3 present(vec3 col, vec2 frag_xy) {
 	float lum = dot(col, vec3(0.299, 0.587, 0.114));
 	if (lum < 0.012) {
 		return vec3(0.0);
 	}
-	// Keep the disk inside the display range so Bayer and glyphs still see it.
 	col = col / (vec3(1.0) + col);
 	if (u_dither > 0.5) {
 		col = apply_bayer(col, frag_xy);
 	}
 	if (u_ascii > 0.5) {
-		col = apply_ascii(col, frag_xy);
+		return apply_ascii(col, frag_xy);
 	}
-	return col;
+	return col * (1.0 + max(u_glow_energy, 0.0));
 }
 
 // ---- 月面一侧的辅助函数 ----
@@ -488,6 +484,7 @@ void fragment() {
 		}
 		col += light;
 		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
+		EMISSION = ALBEDO;
 		ALPHA = 1.0 - smoothstep(v_radius * 0.92, v_radius, b);
 	}
 
@@ -567,12 +564,10 @@ void fragment() {
 			col = background + u_color_inner.rgb * ring * pulse * 1.35;
 		}
 
-		// 辉光属于画面的一部分，必须先合入再走 ASCII / Bayer。
-		// 否则会被加在 present() 之后，绕过字符与抖动，成为一圈平滑的亮边。
-		// 外晕在透镜边缘之前淡出，避免被 quad 裁成硬边。
-		float glow_fade = 1.0 - smoothstep(v_radius * 0.72, v_radius, b);
-		col += accretion_glow(b, b_vec) * u_glow_energy * glow_fade;
+		// Glyph strokes carry baked HDR + atlas fringe glow (transparent screen pass
+		// often skips Environment bloom). EMISSION mirrors ALBEDO when the pass allows it.
 		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
+		EMISSION = ALBEDO;
 		ALPHA = 1.0;
 	}
 }
