@@ -263,13 +263,17 @@ func _publish_light() -> void:
 	var moon := _scene_node("Moon")
 	if moon == null or optics == null:
 		return
+	# 编辑器里 optics 可能短暂是占位实例（脚本热重载 / LSP 竞态）：导出字段仍可读，
+	# 实例方法会每帧报错。阴影半径与颜色走类 API + rs，避免 shadow_radius() 刷屏。
+	var shadow := BlackHoleOptics.shadow_per_rs() * optics.rs
+	if shadow <= 0.0:
+		return
 	_ensure_light()
-	var shadow = optics.shadow_radius()
 	var moon_center := moon.global_position
 	var distance := maxf(global_position.distance_to(moon_center), 1.0)
 	_light.visible = true
 	_light.light_energy = light_energy
-	_light.light_color = optics.COLOR_INNER
+	_light.light_color = BlackHoleOptics.COLOR_INNER
 	_light.spot_range = maxf(distance * 1.5, shadow * 4.0)
 	_light.spot_angle = clampf(rad_to_deg(asin(minf(shadow * _light_spread / distance, 0.999))), 1.0, 179.0)
 	_light.spot_angle_attenuation = 0.0
