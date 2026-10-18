@@ -65,8 +65,8 @@ const LUNAR_KEYS := [
 @export var optics: BlackHoleOptics:
 	set(value):
 		optics = value
-		if _shell != null:
-			_shell.bind(value)
+		_ensure_shell()
+		_shell.bind(value)
 
 @export_tool_button("Frame black hole", "Camera3D") var frame_black_hole_button: Callable = frame_black_hole
 
@@ -110,9 +110,7 @@ var _time: float = 0.0
 
 
 func _init() -> void:
-	var shell := _EditorPreviewShell.new()
-	_shell = shell
-	shell.attach(self)
+	_ensure_shell()
 
 
 ## A saved Callable would call the instance that was alive when the scene was written.
@@ -121,7 +119,13 @@ func _validate_property(property: Dictionary) -> void:
 		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
 
 
+func _enter_tree() -> void:
+	# @tool reload clears RefCounted members without re-running _init on the live node.
+	_ensure_shell()
+
+
 func _ready() -> void:
+	_ensure_shell()
 	if get_node_or_null("GlyphField") != null:
 		push_error("BlackHole must not own a GlyphField")
 	if not basis.is_equal_approx(Basis.IDENTITY):
@@ -140,6 +144,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_ensure_shell()
 	_shell.tick(delta)
 
 
@@ -149,7 +154,19 @@ func _advance_disk(step: float) -> void:
 
 
 func frame_black_hole() -> Transform3D:
+	_ensure_shell()
 	return _shell.frame_black_hole()
+
+
+## Editor script reload wipes _shell; rebuild and rebind the current optics.
+func _ensure_shell() -> void:
+	if _shell != null:
+		return
+	var shell := _EditorPreviewShell.new()
+	_shell = shell
+	shell.attach(self)
+	if optics != null:
+		shell.bind(optics)
 
 
 func _ensure_lens() -> void:
