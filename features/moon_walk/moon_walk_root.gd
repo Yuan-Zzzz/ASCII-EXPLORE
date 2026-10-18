@@ -12,6 +12,7 @@ const ModelDitherShader = preload("res://features/dither/bayer_model.gdshader")
 @export var sun_aim_path: NodePath = ^"Moon/MoonMesh"
 
 const LENS_LAYER := 10
+const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
 
 var _active_surface_mode: int = -1
 var _glyph_fields: Array[GlyphField] = []
@@ -96,7 +97,7 @@ func _apply_depth_hosts() -> void:
 		else:
 			if surface_render_mode != 1:
 				material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			material.albedo_color = field.tint if surface_render_mode == 1 else Color(0.01, 0.012, 0.02)
+			material.albedo_color = field.tint if surface_render_mode == 1 else VOID_SHELL_COLOR
 			host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		host.material_override = material
 		host.material_overlay = null

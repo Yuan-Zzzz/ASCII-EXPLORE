@@ -14,10 +14,19 @@
 [ext_resource type="Script" uid="uid://buyo05e0cpupp" path="res://features/black_hole/black_hole_optics.gd" id="11_optics"]
 [ext_resource type="Script" uid="uid://b701686lqntxs" path="res://features/moon_walk/orbital_motion.gd" id="12_orbits"]
 [ext_resource type="Shader" uid="uid://bduh7esq64g0x" path="res://features/moon_walk/sun_corona.gdshader" id="13_corona"]
+[ext_resource type="Shader" uid="uid://cv8w20xhw6eca" path="res://features/moon_walk/lunar_sky.gdshader" id="14_lunar_sky"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lunar_sky"]
+shader = ExtResource("14_lunar_sky")
+
+[sub_resource type="Sky" id="Sky_lunar"]
+sky_material = SubResource("ShaderMaterial_lunar_sky")
+process_mode = 3
 
 [sub_resource type="Environment" id="Environment_world"]
-background_mode = 1
-background_color = Color(0.01, 0.012, 0.02, 1)
+background_mode = 2
+background_color = Color(0, 0, 0, 1)
+sky = SubResource("Sky_lunar")
 ambient_light_source = 2
 ambient_light_color = Color(0.35, 0.42, 0.55, 1)
 ambient_light_energy = 0.08
@@ -29,7 +38,7 @@ glow_intensity = 0.8
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cwcok"]
 shading_mode = 0
-albedo_color = Color(0.01, 0.012, 0.02, 1)
+albedo_color = Color(0, 0, 0, 1)
 
 [sub_resource type="SphereMesh" id="Mesh_earth"]
 radius = 96.0
@@ -82,7 +91,7 @@ photon_ring_gain = 4.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y2bat"]
 shading_mode = 0
-albedo_color = Color(0.01, 0.012, 0.02, 1)
+albedo_color = Color(0, 0, 0, 1)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_uvcm7"]
 render_priority = 0
