@@ -80,7 +80,7 @@ const LUNAR_KEYS := [
 	set(value):
 		glyph_px = value
 		_apply_presentation()
-@export_range(0.0, 12.0, 0.01) var glow_energy: float = 1.2:
+@export_range(0.0, 12.0, 0.01) var glow_energy: float = 2.4:
 	set(value):
 		glow_energy = value
 		_apply_presentation()

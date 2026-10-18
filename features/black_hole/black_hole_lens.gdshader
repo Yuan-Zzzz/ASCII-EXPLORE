@@ -224,6 +224,9 @@ vec3 starfield(vec2 uv) {
 	return vec3(0.72, 0.84, 1.0) * keep * spark * twinkle * 3.2;
 }
 
+// Solid glyph stroke plus a soft fringe from the same atlas cell.
+// The lens uses screen_texture so it stays in the transparent pass; Environment
+// glow often ignores that pass, so the fringe is baked into the color the glyph emits.
 vec3 apply_ascii(vec3 col, vec2 frag_xy) {
 	float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
 	if (lum < 0.02) {
@@ -239,10 +242,24 @@ vec3 apply_ascii(vec3 col, vec2 frag_xy) {
 	float du = 1.0 / float(n);
 	vec2 atlas_uv = vec2((float(idx) + local.x) * du, local.y);
 	float mask = textureLod(u_atlas, atlas_uv, 0.0).r;
-	if (mask < 0.28) {
-		return vec3(0.0);
+	vec3 stroke = vec3(0.0);
+	if (mask >= 0.28) {
+		stroke = col * smoothstep(0.28, 0.75, mask);
 	}
-	return col * smoothstep(0.28, 0.75, mask);
+	float glow_mask = 0.0;
+	for (int oy = -2; oy <= 2; oy++) {
+		for (int ox = -2; ox <= 2; ox++) {
+			vec2 o = local + vec2(float(ox), float(oy)) * 0.16;
+			if (o.x < 0.0 || o.x > 1.0 || o.y < 0.0 || o.y > 1.0) {
+				continue;
+			}
+			float m = textureLod(u_atlas, vec2((float(idx) + o.x) * du, o.y), 0.0).r;
+			float w = exp(-0.5 * float(ox * ox + oy * oy));
+			glow_mask += m * w;
+		}
+	}
+	vec3 glow = col * glow_mask * 0.28 * max(u_glow_energy, 0.0);
+	return stroke * (1.0 + 0.85 * max(u_glow_energy, 0.0)) + glow;
 }
 
 vec3 apply_bayer(vec3 col, vec2 frag_xy) {
@@ -262,9 +279,9 @@ vec3 present(vec3 col, vec2 frag_xy) {
 		col = apply_bayer(col, frag_xy);
 	}
 	if (u_ascii > 0.5) {
-		col = apply_ascii(col, frag_xy);
+		return apply_ascii(col, frag_xy);
 	}
-	return col;
+	return col * (1.0 + max(u_glow_energy, 0.0));
 }
 
 // ---- 月面一侧的辅助函数 ----
@@ -467,7 +484,7 @@ void fragment() {
 		}
 		col += light;
 		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
-		EMISSION = ALBEDO * max(u_glow_energy, 0.0);
+		EMISSION = ALBEDO;
 		ALPHA = 1.0 - smoothstep(v_radius * 0.92, v_radius, b);
 	}
 
@@ -547,10 +564,10 @@ void fragment() {
 			col = background + u_color_inner.rgb * ring * pulse * 1.35;
 		}
 
-		// Disk and photon ring become glyphs first. Glow is emission on those strokes
-		// (GlyphField sun path), not extra cells painted to fake a soft corona.
+		// Glyph strokes carry baked HDR + atlas fringe glow (transparent screen pass
+		// often skips Environment bloom). EMISSION mirrors ALBEDO when the pass allows it.
 		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
-		EMISSION = ALBEDO * max(u_glow_energy, 0.0);
+		EMISSION = ALBEDO;
 		ALPHA = 1.0;
 	}
 }

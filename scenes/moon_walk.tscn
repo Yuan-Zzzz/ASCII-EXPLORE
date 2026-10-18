@@ -168,7 +168,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5394.988, 2312.138, -3082.85)
 script = ExtResource("10_blackhole")
 optics = SubResource("Resource_black_hole_optics")
 ramp = ExtResource("3_ramp")
-glow_energy = 0.6
+glow_energy = 2.4
 dither_pixel_size = 1.0
 
 [node name="Moon" type="StaticBody3D" parent="." unique_id=1950569615]
