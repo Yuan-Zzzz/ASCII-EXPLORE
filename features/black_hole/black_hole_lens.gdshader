@@ -47,7 +47,7 @@ uniform vec3 u_sky_height_0 = vec3(0.0);
 uniform vec3 u_sky_height_1 = vec3(0.0);
 uniform float u_sky_radius_0 = 0.0;
 uniform float u_sky_radius_1 = 0.0;
-// 盘面照射月面的光：颜色和形状与 accretion_glow() 一致。
+// 盘面照射月面的光（CPU beam_state / COLOR_INNER 一侧）。
 uniform float u_beam_lit = 0.0;
 uniform vec3 u_beam_energy = vec3(0.0);
 uniform vec3 u_beam_inner = vec3(1.0, 0.82, 0.55);
@@ -224,9 +224,8 @@ vec3 starfield(vec2 uv) {
 	return vec3(0.72, 0.84, 1.0) * keep * spark * twinkle * 3.2;
 }
 
-vec3 apply_ascii(vec3 hdr, vec3 tint, vec2 frag_xy) {
-	// Index from HDR so the corona stays dense bright glyphs; tint stays display-mapped.
-	float lum = clamp(dot(hdr, vec3(0.299, 0.587, 0.114)) / (1.0 + dot(hdr, vec3(0.299, 0.587, 0.114))), 0.0, 1.0);
+vec3 apply_ascii(vec3 col, vec2 frag_xy) {
+	float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
 	if (lum < 0.02) {
 		return vec3(0.0);
 	}
@@ -243,7 +242,7 @@ vec3 apply_ascii(vec3 hdr, vec3 tint, vec2 frag_xy) {
 	if (mask < 0.28) {
 		return vec3(0.0);
 	}
-	return tint * smoothstep(0.28, 0.75, mask);
+	return col * smoothstep(0.28, 0.75, mask);
 }
 
 vec3 apply_bayer(vec3 col, vec2 frag_xy) {
@@ -253,37 +252,19 @@ vec3 apply_bayer(vec3 col, vec2 frag_xy) {
 	return clamp(floor(clamp(col, 0.0, 1.0) * steps + threshold) / steps, 0.0, 1.0);
 }
 
-// 黑洞本身不发光：辉光只来自吸积盘和光子环。
-// b <= b_crit 时返回 0，事件视界保持纯黑；外侧按光子环高斯衰减，
-// 并用与盘相同的多普勒 + 引力红移 g^4 调制亮度（接近侧更亮）。
-vec3 accretion_glow(float b, vec3 b_vec) {
-	if (b <= u_b_crit) {
-		return vec3(0.0);
-	}
-	float outside = b - u_b_crit;
-	float ring_halo = exp(-pow(outside / max(u_b_crit * 1.15, 0.001), 2.0));
-	// Wider outer lobe so ASCII mode fills a corona of glyphs, not a thin ring.
-	float outer_halo = exp(-pow(outside / max(u_b_crit * 4.8, 0.001), 2.0));
-	float los = ring_los(b_vec);
-	float g_shift = redshift_g(u_disk_inner, los);
-	float beaming = pow(max(g_shift, 0.2), 4.0);
-	float shape = ring_halo + 0.34 * outer_halo;
-	return u_color_inner.rgb * u_emissivity_peak * beaming * shape;
-}
-
 vec3 present(vec3 col, vec2 frag_xy) {
 	float lum = dot(col, vec3(0.299, 0.587, 0.114));
 	if (lum < 0.012) {
 		return vec3(0.0);
 	}
-	vec3 mapped = col / (vec3(1.0) + col);
+	col = col / (vec3(1.0) + col);
 	if (u_dither > 0.5) {
-		mapped = apply_bayer(mapped, frag_xy);
+		col = apply_bayer(col, frag_xy);
 	}
 	if (u_ascii > 0.5) {
-		return apply_ascii(col, mapped, frag_xy);
+		col = apply_ascii(col, frag_xy);
 	}
-	return mapped;
+	return col;
 }
 
 // ---- 月面一侧的辅助函数 ----
@@ -566,11 +547,8 @@ void fragment() {
 			col = background + u_color_inner.rgb * ring * pulse * 1.35;
 		}
 
-		// Feed glow into lit color before ASCII so the corona is glyphs, then EMISSION
-		// blooms those strokes like GlyphField sun emission.
-		float glow_fade = 1.0 - smoothstep(v_radius * 0.72, v_radius, b);
-		float ascii_feed = u_ascii > 0.5 ? 2.6 : 1.0;
-		col += accretion_glow(b, b_vec) * u_glow_energy * glow_fade * ascii_feed;
+		// Disk and photon ring become glyphs first. Glow is emission on those strokes
+		// (GlyphField sun path), not extra cells painted to fake a soft corona.
 		ALBEDO = present(col, SCREEN_UV * VIEWPORT_SIZE);
 		EMISSION = ALBEDO * max(u_glow_energy, 0.0);
 		ALPHA = 1.0;
