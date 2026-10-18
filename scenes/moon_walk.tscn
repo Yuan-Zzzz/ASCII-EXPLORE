@@ -25,7 +25,6 @@ process_mode = 3
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 2
-background_color = Color(0, 0, 0, 1)
 sky = SubResource("Sky_lunar")
 ambient_light_source = 2
 ambient_light_color = Color(0.35, 0.42, 0.55, 1)
@@ -142,33 +141,37 @@ dither_pixel_size = 1.0
 
 [node name="SunHost" type="MeshInstance3D" parent="SkyPivot" unique_id=1562244100]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.206, 2546.541, -3339.924)
+visible = false
 material_override = SubResource("StandardMaterial3D_p71e7")
 cast_shadow = 0
 mesh = SubResource("Mesh_sun")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="SkyPivot/SunHost" unique_id=838375213]
+visible = false
 cast_shadow = 0
 script = ExtResource("4_glyph")
 ramp = ExtResource("3_ramp")
-spacing = 17.75
-seed = 60
-glyph_px = 18.74
+spacing = 10.0
+seed = 10
 tint = Color(0.72, 0.51588, 0.1368, 1)
 light_dir = Vector3(0.0013301211, 0.6061793, -0.79532695)
-ambient = 5.425
-emission_energy = 3.0
+ambient = 1.7349999999999999
+emission_energy = 0.36
 dither_pixel_size = 1.0
 emissive_body = true
 
 [node name="Corona" type="MeshInstance3D" parent="SkyPivot/SunHost" unique_id=1119455715]
 transform = Transform3D(1000, 0, 0, 0, 1000, 0, 0, 0, 1000, 0, 0, 0)
+visible = false
 material_override = SubResource("ShaderMaterial_corona")
 cast_shadow = 0
 mesh = SubResource("QuadMesh_corona")
 
 [node name="SunLight" type="DirectionalLight3D" parent="SkyPivot/SunHost" unique_id=1380835367]
 transform = Transform3D(-0.9999986, -0.0010137853, 0.001330121, 0, 0.795328, 0.6061793, -0.0016724181, 0.60617846, -0.79532695, -0.61935425, -0.49414063, -0.5722656)
-light_color = Color(0.82, 0.88, 1, 1)
+visible = false
+light_color = Color(0.94261557, 0.8783111, 0.631667, 1)
+light_energy = 5.732
 shadow_enabled = true
 directional_shadow_max_distance = 600.0
 
@@ -177,8 +180,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5394.988, 2312.138, -3082.85)
 script = ExtResource("10_blackhole")
 optics = SubResource("Resource_black_hole_optics")
 ramp = ExtResource("3_ramp")
-glow_energy = 2.4
-dither_pixel_size = 1.0
+spin_speed = 3.5
+glyph_px = 0.5
+glow_energy = 12.0
+dither_pixel_size = 8.0
+dither_color_levels = 16.0
+light_energy = 2.42
+light_falloff_power = 1.15
+light_tilt_degrees = 94.0
+ring_glint = 2.0
 
 [node name="Moon" type="StaticBody3D" parent="." unique_id=1950569615]
 script = ExtResource("7_terrain")
@@ -226,8 +236,10 @@ far = 13000.0
 
 [node name="AsciiLayer" type="CanvasLayer" parent="." unique_id=184798892]
 layer = 10
+visible = false
 
 [node name="Hint" type="Label" parent="AsciiLayer" unique_id=1498050133]
+visible = false
 offset_left = 16.0
 offset_top = 12.0
 offset_right = 720.0
@@ -237,4 +249,5 @@ theme_override_font_sizes/font_size = 16
 text = "WASD move · mouse look · Space jump · Esc"
 
 [node name="GlyphControls" type="PanelContainer" parent="AsciiLayer" unique_id=296220246]
+visible = false
 script = ExtResource("6_controls")
