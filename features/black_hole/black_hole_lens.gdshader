@@ -30,7 +30,6 @@ uniform float u_ascii = 1.0;
 uniform float u_dither = 1.0;
 uniform float u_dither_pixel_size = 1.0;
 uniform float u_dither_color_levels = 4.0;
-uniform vec3 u_ascii_bg = vec3(0.01, 0.012, 0.02);
 uniform float u_glow_energy = 0.18;
 
 // 月面一侧（从月面看黑洞）：
@@ -235,15 +234,18 @@ vec3 apply_ascii(vec3 col, vec2 frag_xy) {
 	vec2 local = fract(frag_xy / cell);
 	int n = max(u_char_count, 1);
 	int idx = clamp(int(lum * float(n)), 0, n - 1);
+	// Match GlyphField: skip the space cell so dark areas do not paint a solid floor.
 	if (idx == 0) {
 		idx = 1;
 	}
 	float du = 1.0 / float(n);
 	vec2 atlas_uv = vec2((float(idx) + local.x) * du, local.y);
 	float mask = textureLod(u_atlas, atlas_uv, 0.0).r;
-	// Between glyphs keep space black so the silhouette and lensed stars read.
-	// Keep a colored floor so the disk stays a disk; glyphs only texture it.
-	return mix(col * 0.42, col, step(0.18, mask));
+	// Match GlyphField: only the glyph stroke is lit; gaps stay black.
+	if (mask < 0.28) {
+		return vec3(0.0);
+	}
+	return col * smoothstep(0.28, 0.75, mask);
 }
 
 vec3 apply_bayer(vec3 col, vec2 frag_xy) {

@@ -52,11 +52,11 @@ func _scene_contract() -> bool:
 	var mat: ShaderMaterial = bh.lens_material()
 	if mat == null:
 		return _fail("missing lens ShaderMaterial")
-	main.surface_render_mode = 0
+	bh.surface_render_mode = 0
 	await process_frame
-	main.surface_render_mode = 1
+	bh.surface_render_mode = 1
 	await process_frame
-	main.surface_render_mode = 2
+	bh.surface_render_mode = 2
 	await process_frame
 	if bh.lens_material() != mat:
 		return _fail("lens material replaced by surface_render_mode")
@@ -93,7 +93,7 @@ func _scene_contract() -> bool:
 		if String(uname).begins_with("u_") and not allowed.has(String(uname)):
 			return _fail("extra shader uniform %s" % uname)
 
-	main.surface_render_mode = 2
+	bh.surface_render_mode = 2
 	await process_frame
 	if not is_equal_approx(float(mat.get_shader_parameter("u_ascii")), 1.0):
 		return _fail("ASCII+Bayer mode should enable u_ascii")
@@ -102,17 +102,17 @@ func _scene_contract() -> bool:
 	if mat.get_shader_parameter("u_atlas") == null:
 		return _fail("missing ASCII atlas on lens")
 
-	main.surface_render_mode = 0
+	bh.surface_render_mode = 0
 	await process_frame
 	if not is_equal_approx(float(mat.get_shader_parameter("u_dither")), 0.0):
 		return _fail("ASCII 3D mode should disable dither")
 
-	main.surface_render_mode = 1
+	bh.surface_render_mode = 1
 	await process_frame
 	if not is_equal_approx(float(mat.get_shader_parameter("u_ascii")), 0.0):
 		return _fail("Bayer Model mode should disable ascii glyphs")
 
-	main.surface_render_mode = 2
+	bh.surface_render_mode = 2
 	var phase0: float = float(mat.get_shader_parameter("u_disk_phase"))
 	bh.animate = true
 	bh.spin_speed = 2.0

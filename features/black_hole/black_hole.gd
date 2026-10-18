@@ -4,6 +4,7 @@ extends Node3D
 
 const LENS_SHADER := preload("res://features/black_hole/black_hole_lens.gdshader")
 const DEFAULT_RAMP := preload("res://features/ascii/ascii_ramp.tres")
+const _EditorPreviewShell := preload("res://features/black_hole/editor_preview_shell.gd")
 const _LENS_NAME := "Lens"
 const _MOON_LENS_NAME := "MoonLens"
 const _LIGHT_NAME := "DiskLight"
@@ -25,7 +26,6 @@ const PRESENTATION_KEYS := [
 	"u_dither",
 	"u_dither_pixel_size",
 	"u_dither_color_levels",
-	"u_ascii_bg",
 	"u_glow_energy",
 ]
 
@@ -60,22 +60,58 @@ const LUNAR_KEYS := [
 	"u_beam_disk_outer",
 ]
 
-@export var optics: BlackHoleOptics
-@export var ramp: AsciiRamp
+@export_group("Optics")
+@export var optics: BlackHoleOptics:
+	set(value):
+		optics = value
+		_ensure_shell()
+		_shell.bind(value)
+
+@export_tool_button("Frame black hole", "Camera3D") var frame_black_hole_button: Callable = frame_black_hole
+
+@export_group("Presentation")
+@export var ramp: AsciiRamp:
+	set(value):
+		ramp = value
+		_apply_presentation()
 @export var animate: bool = true
 @export_range(0.0, 4.0, 0.01) var spin_speed: float = 0.55
-@export var glyph_px: float = 14.0
-@export var moon_path: NodePath = ^"../../Moon"
-@export var observer_path: NodePath = ^"../../Player/Camera3D"
-@export var sun_path: NodePath = ^"../SunHost"
-@export var sky_body_paths: Array[NodePath] = [^"../Earth", ^"../SunHost"]
-@export_range(0.0, 2.0, 0.01) var glow_energy: float = 1.2
-@export_range(0.0, 4.0, 0.01) var light_energy: float = 1.2
+@export var glyph_px: float = 14.0:
+	set(value):
+		glyph_px = value
+		_apply_presentation()
+@export_range(0.0, 2.0, 0.01) var glow_energy: float = 1.2:
+	set(value):
+		glow_energy = value
+		_apply_presentation()
+@export_enum("ASCII 3D", "Bayer Model", "ASCII + Bayer") var surface_render_mode: int = 2:
+	set(value):
+		surface_render_mode = value
+		_apply_presentation()
+@export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 1.0:
+	set(value):
+		dither_pixel_size = value
+		_apply_presentation()
+@export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0:
+	set(value):
+		dither_color_levels = value
+		_apply_presentation()
+@export_range(0.0, 4.0, 0.01) var light_energy: float = 1.2:
+	set(value):
+		light_energy = value
+		_publish_light()
 @export_range(0.0, 2.0, 0.01) var light_falloff_power: float = 1.0
 @export_range(0.0, 180.0, 1.0) var light_tilt_degrees: float = 62.0
 @export_range(0.0, 4.0, 0.01) var ring_energy: float = 1.0
 @export_range(0.0, 2.0, 0.01) var ring_glint: float = 0.0
 
+@export_group("")
+@export var moon_path: NodePath = ^"../../Moon"
+@export var observer_path: NodePath = ^"../../Player/Camera3D"
+@export var sun_path: NodePath = ^"../SunHost"
+@export var sky_body_paths: Array[NodePath] = [^"../Earth", ^"../SunHost"]
+
+var _shell: RefCounted
 var _lens_material: ShaderMaterial
 var _light: SpotLight3D
 var _moon_lens: MeshInstance3D
@@ -84,7 +120,22 @@ var _disk_phase: float = 0.0
 var _time: float = 0.0
 
 
+func _init() -> void:
+	_ensure_shell()
+
+
+## A saved Callable would call the instance that was alive when the scene was written.
+func _validate_property(property: Dictionary) -> void:
+	if property.name == &"frame_black_hole_button":
+		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
+
+func _enter_tree() -> void:
+	# @tool reload clears RefCounted members without re-running _init on the live node.
+	_ensure_shell()
+
+
 func _ready() -> void:
+	_ensure_shell()
 	if get_node_or_null("GlyphField") != null:
 		push_error("BlackHole must not own a GlyphField")
 	if not basis.is_equal_approx(Basis.IDENTITY):
@@ -98,27 +149,34 @@ func _ready() -> void:
 		optics = BlackHoleOptics.new()
 	if ramp == null:
 		ramp = DEFAULT_RAMP
-	if not optics.changed.is_connected(_upload):
-		optics.changed.connect(_upload)
 	_ensure_lens()
 	_apply_uniforms()
 
 
 func _process(delta: float) -> void:
-	if Engine.is_editor_hint():
-		# Keep a slow preview spin in the editor without depending on the game clock.
-		if animate:
-			_time += 0.016
-			_disk_phase = wrapf(_disk_phase + spin_speed * 0.016, 0.0, TAU)
-			_apply_presentation()
-		_publish_light()
+	_ensure_shell()
+	_shell.tick(delta)
+
+
+func _advance_disk(step: float) -> void:
+	_time += step
+	_disk_phase = wrapf(_disk_phase + spin_speed * step, 0.0, TAU)
+
+
+func frame_black_hole() -> Transform3D:
+	_ensure_shell()
+	return _shell.frame_black_hole()
+
+
+## Editor script reload wipes _shell; rebuild and rebind the current optics.
+func _ensure_shell() -> void:
+	if _shell != null:
 		return
-	if animate:
-		_time += delta
-		_disk_phase = wrapf(_disk_phase + spin_speed * delta, 0.0, TAU)
-	_apply_presentation()
-	_publish_light()
-	_publish_moon_view()
+	var shell := _EditorPreviewShell.new()
+	_shell = shell
+	shell.attach(self)
+	if optics != null:
+		shell.bind(optics)
 
 
 func _ensure_lens() -> void:
@@ -164,39 +222,20 @@ func _apply_uniforms() -> void:
 	_publish_light()
 
 
-func _moon_walk_root() -> Node:
-	var node: Node = self
-	while node != null:
-		if node.get("surface_render_mode") != null and node.get("dither_pixel_size") != null:
-			return node
-		node = node.get_parent()
-	return null
-
-
 func _apply_presentation() -> void:
 	if _lens_material == null:
 		return
-	var ascii_on := 1.0
-	var dither_on := 1.0
-	var dither_px := 1.0
-	var dither_levels := 4.0
-	var root := _moon_walk_root()
-	if root != null:
-		var mode := int(root.get("surface_render_mode"))
-		# Match MoonWalk modes: 0 ASCII, 1 Bayer model, 2 ASCII + Bayer.
-		ascii_on = 0.0 if mode == 1 else 1.0
-		dither_on = 0.0 if mode == 0 else 1.0
-		dither_px = float(root.get("dither_pixel_size"))
-		dither_levels = float(root.get("dither_color_levels"))
+	# Same mode enum as MoonWalk: 0 ASCII, 1 Bayer model, 2 ASCII + Bayer.
+	var ascii_on := 0.0 if surface_render_mode == 1 else 1.0
+	var dither_on := 0.0 if surface_render_mode == 0 else 1.0
 	_lens_material.set_shader_parameter("u_time", _time)
 	_lens_material.set_shader_parameter("u_disk_phase", _disk_phase)
 	_lens_material.set_shader_parameter("u_ascii", ascii_on)
 	_lens_material.set_shader_parameter("u_dither", dither_on)
-	_lens_material.set_shader_parameter("u_dither_pixel_size", dither_px)
-	_lens_material.set_shader_parameter("u_dither_color_levels", dither_levels)
+	_lens_material.set_shader_parameter("u_dither_pixel_size", dither_pixel_size)
+	_lens_material.set_shader_parameter("u_dither_color_levels", dither_color_levels)
 	_lens_material.set_shader_parameter("u_glyph_px", glyph_px)
 	_lens_material.set_shader_parameter("u_glow_energy", glow_energy)
-	_lens_material.set_shader_parameter("u_ascii_bg", Vector3(0.01, 0.012, 0.02))
 	if ramp != null and ramp.atlas != null:
 		_lens_material.set_shader_parameter("u_atlas", ramp.atlas)
 		_lens_material.set_shader_parameter("u_char_count", ramp.char_count)

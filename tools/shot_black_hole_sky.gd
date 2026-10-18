@@ -31,9 +31,7 @@ func _run() -> void:
 		var m: ShaderMaterial = lens.material_override
 		print("SKY params occ=", m.get_shader_parameter("u_occlude"), " r=", m.get_shader_parameter("u_occluder_radius"), " beacon=", m.get_shader_parameter("u_beam_lit"), " transit=", m.get_shader_parameter("u_transit"), " hdist=", m.get_shader_parameter("u_sky_height_0"), " count=", m.get_shader_parameter("u_sky_count"))
 		_save(cam, "res://sky_bh_ascii.png")
-		main.set("surface_render_mode", 1)
-		m.set_shader_parameter("u_ascii", 0.0)
-		m.set_shader_parameter("u_dither", 0.0)
+		bh.set("surface_render_mode", 1)
 		await _settle(6)
 		_save(cam, "res://sky_bh_raw.png")
 	print("SKY_OK")
