@@ -4,6 +4,7 @@ extends Node3D
 
 const LENS_SHADER := preload("res://features/black_hole/black_hole_lens.gdshader")
 const DEFAULT_RAMP := preload("res://features/ascii/ascii_ramp.tres")
+const _EditorPreviewShell := preload("res://features/black_hole/editor_preview_shell.gd")
 const _LENS_NAME := "Lens"
 const _MOON_LENS_NAME := "MoonLens"
 const _LIGHT_NAME := "DiskLight"
@@ -60,28 +61,64 @@ const LUNAR_KEYS := [
 	"u_beam_disk_outer",
 ]
 
-@export var optics: BlackHoleOptics
-@export var ramp: AsciiRamp
+@export_group("Optics")
+@export var optics: BlackHoleOptics:
+	set(value):
+		optics = value
+		if _shell != null:
+			_shell.bind(value)
+
+@export_tool_button("Frame black hole", "Camera3D") var frame_black_hole_button: Callable = frame_black_hole
+
+@export_group("Presentation")
+@export var ramp: AsciiRamp:
+	set(value):
+		ramp = value
+		_apply_presentation()
 @export var animate: bool = true
 @export_range(0.0, 4.0, 0.01) var spin_speed: float = 0.55
-@export var glyph_px: float = 14.0
-@export var moon_path: NodePath = ^"../../Moon"
-@export var observer_path: NodePath = ^"../../Player/Camera3D"
-@export var sun_path: NodePath = ^"../SunHost"
-@export var sky_body_paths: Array[NodePath] = [^"../Earth", ^"../SunHost"]
-@export_range(0.0, 2.0, 0.01) var glow_energy: float = 1.2
-@export_range(0.0, 4.0, 0.01) var light_energy: float = 1.2
+@export var glyph_px: float = 14.0:
+	set(value):
+		glyph_px = value
+		_apply_presentation()
+@export_range(0.0, 2.0, 0.01) var glow_energy: float = 1.2:
+	set(value):
+		glow_energy = value
+		_apply_presentation()
+@export_range(0.0, 4.0, 0.01) var light_energy: float = 1.2:
+	set(value):
+		light_energy = value
+		_publish_light()
 @export_range(0.0, 2.0, 0.01) var light_falloff_power: float = 1.0
 @export_range(0.0, 180.0, 1.0) var light_tilt_degrees: float = 62.0
 @export_range(0.0, 4.0, 0.01) var ring_energy: float = 1.0
 @export_range(0.0, 2.0, 0.01) var ring_glint: float = 0.0
 
+@export_group("")
+@export var moon_path: NodePath = ^"../../Moon"
+@export var observer_path: NodePath = ^"../../Player/Camera3D"
+@export var sun_path: NodePath = ^"../SunHost"
+@export var sky_body_paths: Array[NodePath] = [^"../Earth", ^"../SunHost"]
+
+var _shell: RefCounted
 var _lens_material: ShaderMaterial
 var _light: SpotLight3D
 var _moon_lens: MeshInstance3D
 var _moon_lens_material: ShaderMaterial
 var _disk_phase: float = 0.0
 var _time: float = 0.0
+
+
+func _init() -> void:
+	var shell := _EditorPreviewShell.new()
+	_shell = shell
+	shell.attach(self)
+
+
+## A saved Callable would call the instance that was alive when the scene was written.
+func _validate_property(property: Dictionary) -> void:
+	if property.name == &"frame_black_hole_button":
+		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
 
 
 func _ready() -> void:
@@ -98,27 +135,21 @@ func _ready() -> void:
 		optics = BlackHoleOptics.new()
 	if ramp == null:
 		ramp = DEFAULT_RAMP
-	if not optics.changed.is_connected(_upload):
-		optics.changed.connect(_upload)
 	_ensure_lens()
 	_apply_uniforms()
 
 
 func _process(delta: float) -> void:
-	if Engine.is_editor_hint():
-		# Keep a slow preview spin in the editor without depending on the game clock.
-		if animate:
-			_time += 0.016
-			_disk_phase = wrapf(_disk_phase + spin_speed * 0.016, 0.0, TAU)
-			_apply_presentation()
-		_publish_light()
-		return
-	if animate:
-		_time += delta
-		_disk_phase = wrapf(_disk_phase + spin_speed * delta, 0.0, TAU)
-	_apply_presentation()
-	_publish_light()
-	_publish_moon_view()
+	_shell.tick(delta)
+
+
+func _advance_disk(step: float) -> void:
+	_time += step
+	_disk_phase = wrapf(_disk_phase + spin_speed * step, 0.0, TAU)
+
+
+func frame_black_hole() -> Transform3D:
+	return _shell.frame_black_hole()
 
 
 func _ensure_lens() -> void:
