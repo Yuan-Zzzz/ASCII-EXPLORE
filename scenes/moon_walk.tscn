@@ -169,6 +169,7 @@ script = ExtResource("10_blackhole")
 optics = SubResource("Resource_black_hole_optics")
 ramp = ExtResource("3_ramp")
 glow_energy = 0.6
+dither_pixel_size = 1.0
 
 [node name="Moon" type="StaticBody3D" parent="." unique_id=1950569615]
 script = ExtResource("7_terrain")

@@ -28,7 +28,7 @@ func _run() -> void:
 		quit(1)
 		return
 
-	main.set("surface_render_mode", 2)
+	bh.set("surface_render_mode", 2)
 	bh.set("animate", true)
 	bh.set("spin_speed", 1.4)
 	bh.set("glyph_px", 8.0)
@@ -54,7 +54,7 @@ func _run() -> void:
 	if not await _save(cam, "res://bh_shot_close.png"):
 		return
 
-	main.set("surface_render_mode", 1)
+	bh.set("surface_render_mode", 1)
 	await _settle(8)
 	if not await _save(cam, "res://bh_shot_raw.png"):
 		return

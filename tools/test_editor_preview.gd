@@ -32,26 +32,24 @@ func _run() -> void:
 	assert(float(lens_material.get_shader_parameter("u_lens_radius")) > 0.0, "Editor lens needs a viewport-sized radius")
 	assert(float(lens_material.get_shader_parameter("u_ascii")) == 1.0, "Editor lens must show ASCII by default")
 	assert(float(lens_material.get_shader_parameter("u_dither")) == 1.0, "Editor lens must show dither by default")
-	var moon_walk := scene
-	var prior_mode := int(moon_walk.get("surface_render_mode"))
-	var prior_dither_px := float(moon_walk.get("dither_pixel_size"))
+	var moon_walk_mode := int(scene.get("surface_render_mode"))
+	var moon_walk_dither_px := float(scene.get("dither_pixel_size"))
 	black_hole.surface_render_mode = 0
 	await process_frame
-	assert(int(moon_walk.get("surface_render_mode")) == 0, "BlackHole surface mode must write through to MoonWalk")
+	assert(int(scene.get("surface_render_mode")) == moon_walk_mode, "BlackHole surface mode must not change MoonWalk")
 	assert(float(lens_material.get_shader_parameter("u_ascii")) == 1.0, "ASCII-only mode keeps ascii on")
 	assert(float(lens_material.get_shader_parameter("u_dither")) == 0.0, "ASCII-only mode turns dither off")
 	black_hole.surface_render_mode = 2
 	black_hole.dither_pixel_size = 3.0
 	black_hole.dither_color_levels = 8.0
 	await process_frame
-	assert(is_equal_approx(float(moon_walk.get("dither_pixel_size")), 3.0), "dither_pixel_size must write through")
-	assert(is_equal_approx(float(moon_walk.get("dither_color_levels")), 8.0), "dither_color_levels must write through")
+	assert(is_equal_approx(float(scene.get("dither_pixel_size")), moon_walk_dither_px), "BlackHole dither must not change MoonWalk")
 	assert(is_equal_approx(float(lens_material.get_shader_parameter("u_dither_pixel_size")), 3.0))
 	assert(is_equal_approx(float(lens_material.get_shader_parameter("u_dither_color_levels")), 8.0))
 	assert(float(lens_material.get_shader_parameter("u_dither")) == 1.0, "ASCII+Bayer keeps dither on")
-	moon_walk.set("surface_render_mode", prior_mode)
-	moon_walk.set("dither_pixel_size", prior_dither_px)
-	moon_walk.set("dither_color_levels", 4.0)
+	black_hole.surface_render_mode = 2
+	black_hole.dither_pixel_size = 1.0
+	black_hole.dither_color_levels = 4.0
 	black_hole.animate = false
 	black_hole.glow_energy = 0.25
 	await process_frame

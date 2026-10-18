@@ -86,20 +86,17 @@ const LUNAR_KEYS := [
 		glow_energy = value
 		_apply_presentation()
 @export_enum("ASCII 3D", "Bayer Model", "ASCII + Bayer") var surface_render_mode: int = 2:
-	get:
-		return int(_surface_get(&"surface_render_mode", 2))
 	set(value):
-		_surface_set(&"surface_render_mode", value)
-@export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0:
-	get:
-		return float(_surface_get(&"dither_pixel_size", 2.0))
+		surface_render_mode = value
+		_apply_presentation()
+@export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 1.0:
 	set(value):
-		_surface_set(&"dither_pixel_size", value)
+		dither_pixel_size = value
+		_apply_presentation()
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0:
-	get:
-		return float(_surface_get(&"dither_color_levels", 4.0))
 	set(value):
-		_surface_set(&"dither_color_levels", value)
+		dither_color_levels = value
+		_apply_presentation()
 @export_range(0.0, 4.0, 0.01) var light_energy: float = 1.2:
 	set(value):
 		light_energy = value
@@ -114,12 +111,6 @@ const LUNAR_KEYS := [
 @export var observer_path: NodePath = ^"../../Player/Camera3D"
 @export var sun_path: NodePath = ^"../SunHost"
 @export var sky_body_paths: Array[NodePath] = [^"../Earth", ^"../SunHost"]
-
-const _SURFACE_PROXY_NAMES := [
-	&"surface_render_mode",
-	&"dither_pixel_size",
-	&"dither_color_levels",
-]
 
 var _shell: RefCounted
 var _lens_material: ShaderMaterial
@@ -137,8 +128,6 @@ func _init() -> void:
 ## A saved Callable would call the instance that was alive when the scene was written.
 func _validate_property(property: Dictionary) -> void:
 	if property.name == &"frame_black_hole_button":
-		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
-	if property.name in _SURFACE_PROXY_NAMES:
 		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
 
 func _enter_tree() -> void:
@@ -234,53 +223,18 @@ func _apply_uniforms() -> void:
 	_publish_light()
 
 
-func _moon_walk_root() -> Node:
-	# Start above self: BlackHole's surface_* getters also call this.
-	var node: Node = get_parent()
-	while node != null:
-		if node.get("sun_core_energy") != null and node.get("dither_pixel_size") != null:
-			return node
-		node = node.get_parent()
-	return null
-
-
-func _surface_get(key: StringName, fallback: Variant) -> Variant:
-	var root := _moon_walk_root()
-	if root == null:
-		return fallback
-	return root.get(key)
-
-
-func _surface_set(key: StringName, value: Variant) -> void:
-	var root := _moon_walk_root()
-	if root == null:
-		push_warning("BlackHole surface proxies need a MoonWalk root")
-		return
-	root.set(key, value)
-	_apply_presentation()
-
-
 func _apply_presentation() -> void:
 	if _lens_material == null:
 		return
-	var ascii_on := 1.0
-	var dither_on := 1.0
-	var dither_px := 1.0
-	var dither_levels := 4.0
-	var root := _moon_walk_root()
-	if root != null:
-		var mode := int(root.get("surface_render_mode"))
-		# Match MoonWalk modes: 0 ASCII, 1 Bayer model, 2 ASCII + Bayer.
-		ascii_on = 0.0 if mode == 1 else 1.0
-		dither_on = 0.0 if mode == 0 else 1.0
-		dither_px = float(root.get("dither_pixel_size"))
-		dither_levels = float(root.get("dither_color_levels"))
+	# Same mode enum as MoonWalk: 0 ASCII, 1 Bayer model, 2 ASCII + Bayer.
+	var ascii_on := 0.0 if surface_render_mode == 1 else 1.0
+	var dither_on := 0.0 if surface_render_mode == 0 else 1.0
 	_lens_material.set_shader_parameter("u_time", _time)
 	_lens_material.set_shader_parameter("u_disk_phase", _disk_phase)
 	_lens_material.set_shader_parameter("u_ascii", ascii_on)
 	_lens_material.set_shader_parameter("u_dither", dither_on)
-	_lens_material.set_shader_parameter("u_dither_pixel_size", dither_px)
-	_lens_material.set_shader_parameter("u_dither_color_levels", dither_levels)
+	_lens_material.set_shader_parameter("u_dither_pixel_size", dither_pixel_size)
+	_lens_material.set_shader_parameter("u_dither_color_levels", dither_color_levels)
 	_lens_material.set_shader_parameter("u_glyph_px", glyph_px)
 	_lens_material.set_shader_parameter("u_glow_energy", glow_energy)
 	_lens_material.set_shader_parameter("u_ascii_bg", Vector3(0.01, 0.012, 0.02))
