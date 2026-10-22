@@ -125,9 +125,10 @@ sun_path = NodePath("..")
 sky_body_paths = []
 
 [node name="Player" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 1.2, 16)
 script = ExtResource("2_player")
 moon_body_path = NodePath("../Ground/GroundBody")
+initial_yaw_degrees = 1.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
 shape = SubResource("Shape_player")
