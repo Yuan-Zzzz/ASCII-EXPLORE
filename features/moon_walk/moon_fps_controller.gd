@@ -19,6 +19,7 @@ class WorldFrame:
 @export var jump_speed: float = 4.0
 @export var gravity: float = 4.2
 @export var mouse_sensitivity: float = 0.0022
+@export var initial_yaw_degrees: float = 0.0
 
 var _frame: WorldFrame
 var _body: Node3D
@@ -32,6 +33,7 @@ func _ready() -> void:
 	_body = get_node(moon_body_path) as Node3D
 	_frame = WorldFrame.new()
 	_frame.center = _body.global_position
+	_yaw_delta = deg_to_rad(initial_yaw_degrees)
 
 
 func _unhandled_input(event: InputEvent) -> void:
