@@ -16,8 +16,6 @@ uniform vec3 u_bh_glow_color : source_color = vec3(1.0, 0.55, 0.2);
 uniform float u_bh_glow_spread : hint_range(0.01, 2.0) = 0.35;
 uniform float u_time = 0.0;
 
-varying vec3 v_dir;
-
 
 float hash(vec3 cell_id) {
 	uvec3 q = uvec3(ivec3(cell_id));

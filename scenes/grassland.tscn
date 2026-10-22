@@ -1,0 +1,140 @@
+[gd_scene load_steps=16 format=3 ]
+
+[ext_resource type="Script" path="res://features/meadow/grassland_root.gd" id="1_root"]
+[ext_resource type="Script" path="res://features/moon_walk/moon_fps_controller.gd" id="2_player"]
+[ext_resource type="Script" path="res://features/ascii/glyph_field.gd" id="4_glyph"]
+[ext_resource type="Resource" path="res://features/ascii/ascii_ramp.tres" id="3_ramp"]
+[ext_resource type="PackedScene" path="res://features/meadow/models/meadow_set.glb" id="5_models"]
+[ext_resource type="Script" path="res://features/meadow/gust_field.gd" id="6_gust"]
+[ext_resource type="Script" path="res://features/meadow/grass_patch.gd" id="7_grass"]
+[ext_resource type="Script" path="res://features/meadow/bonfire.gd" id="8_fire"]
+[ext_resource type="Script" path="res://features/meadow/water_plane.gd" id="9_water"]
+[ext_resource type="Shader" path="res://features/meadow/meadow_sky.gdshader" id="10_sky"]
+[ext_resource type="Script" path="res://features/black_hole/black_hole.gd" id="11_bh"]
+[ext_resource type="Script" path="res://features/black_hole/black_hole_optics.gd" id="12_optics"]
+
+[sub_resource type="ShaderMaterial" id="SkyMat"]
+shader = ExtResource("10_sky")
+
+[sub_resource type="Sky" id="MeadowSky"]
+sky_material = SubResource("SkyMat")
+process_mode = 3
+
+[sub_resource type="Environment" id="MeadowEnv"]
+background_mode = 2
+sky = SubResource("MeadowSky")
+ambient_light_source = 3
+ambient_light_color = Color(0.4, 0.32, 0.26, 1)
+ambient_light_energy = 0.35
+glow_enabled = true
+glow_levels/1 = 1.0
+glow_levels/3 = 0.5
+glow_levels/4 = 0.25
+glow_intensity = 0.8
+
+[sub_resource type="Resource" id="BhOptics"]
+script = ExtResource("12_optics")
+rs = 24.0
+inclination = 0.42
+node_longitude = 1.1
+emissivity_exponent = 1.2
+emissivity_peak = 5.0
+photon_ring_width_rs = 0.22
+photon_ring_gain = 3.5
+
+[sub_resource type="CapsuleShape3D" id="Shape_player"]
+radius = 0.35
+height = 1.7
+
+[sub_resource type="BoxShape3D" id="Shape_ground"]
+size = Vector3(120, 4, 120)
+
+[node name="Grassland" type="Node3D"]
+script = ExtResource("1_root")
+light_path = NodePath("")
+black_hole_path = NodePath("BlackHole")
+gust_path = NodePath("GustField")
+water_path = NodePath("Pond")
+bonfire_path = NodePath("Bonfire")
+emissive_core_energy = 0.0
+emissive_glyph_energy = 0.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("MeadowEnv")
+
+[node name="Ground" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeadowSet" parent="Ground" instance=ExtResource("5_models")]
+
+[node name="GlyphField" type="MultiMeshInstance3D" parent="Ground/MeadowSet/Ground"]
+script = ExtResource("4_glyph")
+ramp = ExtResource("3_ramp")
+spacing = 0.4
+seed = 101
+glyph_px = 14.0
+tint = Color(0.30, 0.42, 0.24, 1)
+light_dir = Vector3(0.3, 0.5, -0.8)
+ambient = 0.25
+dither_enabled = true
+dither_pixel_size = 2.0
+dither_lit_weight = 1.0
+hide_from_lens = true
+
+[node name="GroundBody" type="StaticBody3D" parent="Ground"]
+
+[node name="GroundShape" type="CollisionShape3D" parent="Ground/GroundBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
+shape = SubResource("Shape_ground")
+
+[node name="GustField" type="Node3D" parent="."]
+script = ExtResource("6_gust")
+
+[node name="GrassPatch" type="MultiMeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+script = ExtResource("7_grass")
+patch_size = Vector2(90, 90)
+blade_count = 9000
+gust_path = NodePath("../GustField")
+
+[node name="Pond" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, -0.9, 8)
+script = ExtResource("9_water")
+size = Vector2(28, 28)
+
+[node name="Bonfire" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.1, -4)
+script = ExtResource("8_fire")
+
+[node name="BlackHole" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 80, -420)
+script = ExtResource("11_bh")
+optics = SubResource("BhOptics")
+ramp = ExtResource("3_ramp")
+spin_speed = 2.5
+glyph_px = 0.5
+glow_energy = 10.0
+dither_pixel_size = 8.0
+dither_color_levels = 16.0
+light_energy = 3.0
+light_tilt_degrees = 8.0
+ring_glint = 2.0
+moon_path = NodePath("../Ground")
+observer_path = NodePath("../Player/Camera3D")
+sun_path = NodePath("..")
+sky_body_paths = []
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 10)
+script = ExtResource("2_player")
+moon_body_path = NodePath("../Ground/GroundBody")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+shape = SubResource("Shape_player")
+
+[node name="Camera3D" type="Camera3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+current = true
+fov = 70.0
+near = 0.1
+far = 2000.0
