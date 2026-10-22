@@ -5,10 +5,10 @@ render_mode cull_back, depth_draw_opaque;
 uniform vec4 u_waves[3];
 uniform float u_time = 0.0;
 uniform float u_wind_strength = 0.0;
-uniform vec3 u_deep_color = vec3(0.02, 0.08, 0.10);
-uniform vec3 u_shallow_color = vec3(0.1, 0.35, 0.30);
-uniform vec3 u_crest_color = vec3(0.35, 0.6, 0.55);
-uniform float u_crest_energy = 0.35;
+uniform vec3 u_deep_color : source_color = vec3(0.02, 0.08, 0.10);
+uniform vec3 u_shallow_color : source_color = vec3(0.12, 0.38, 0.34);
+uniform vec3 u_crest_color : source_color = vec3(0.45, 0.75, 0.70);
+uniform float u_crest_energy = 0.6;
 
 void vertex() {
 	vec3 pos = VERTEX;
@@ -35,8 +35,9 @@ void vertex() {
 void fragment() {
 	vec3 view_dir = normalize(-VERTEX);
 	float fresnel = pow(clamp(1.0 - dot(normalize(NORMAL), view_dir), 0.0, 1.0), 3.0);
-	ALBEDO = mix(u_deep_color, u_shallow_color, fresnel);
+	// 近处俯视 fresnel 低,若无环境光水面全黑;保底混入浅色让它读得出"水"。
+	ALBEDO = mix(u_deep_color + vec3(0.04, 0.10, 0.10), u_shallow_color, max(fresnel, 0.18));
 	ROUGHNESS = 0.08;
 	METALLIC = 0.0;
-	EMISSION = u_crest_color * u_crest_energy * smoothstep(0.8, 1.0, fresnel);
+	EMISSION = u_crest_color * u_crest_energy * smoothstep(0.72, 1.0, fresnel);
 }
