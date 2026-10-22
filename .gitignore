@@ -18,3 +18,5 @@ lab_*.png.import
 .audit/
 # Ad-hoc test / bench logs at repo root
 *.log
+# Python bytecode from Blender socket tooling
+__pycache__/
