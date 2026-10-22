@@ -114,6 +114,7 @@ height = 1.7
 [node name="MoonWalk" type="Node3D" unique_id=1458876948]
 script = ExtResource("1_root")
 dither_pixel_size = 1.0
+light_path = NodePath("SkyPivot/SunHost/SunLight")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1458794770]
 environment = SubResource("Environment_world")
