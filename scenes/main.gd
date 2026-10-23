@@ -25,7 +25,6 @@ var _yaw := 0.35
 var _pitch := -0.25
 var _dragging := false
 var _glyph_fields: Array[Node] = []
-var _saved_overrides: Dictionary = {}
 
 
 func _ready() -> void:
@@ -100,30 +99,14 @@ func _append_glyph_field(host: Node) -> void:
 
 func _apply_view_mode() -> void:
 	var glyphs_on := view_mode == ViewMode.GLYPHS
-	var post_on := view_mode == ViewMode.POST
-	var raw := view_mode == ViewMode.RAW
-
-	overlay.visible = post_on
+	overlay.visible = view_mode == ViewMode.POST
 	for f in _glyph_fields:
-		if is_instance_valid(f):
-			f.visible = glyphs_on
-
-	# GLYPHS：模型只写深度（近黑），让字符成为画面主体
-	_set_mesh_depth_only(glyphs_on and not raw)
-
-
-func _set_mesh_depth_only(on: bool) -> void:
-	for mi in [ground, earth, sun_ball]:
-		if on:
-			if not _saved_overrides.has(mi):
-				_saved_overrides[mi] = mi.material_override
-			var depth := StandardMaterial3D.new()
-			depth.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			depth.albedo_color = Color(0.02, 0.03, 0.06)
-			mi.material_override = depth
-		else:
-			if _saved_overrides.has(mi):
-				mi.material_override = _saved_overrides[mi]
+		if not is_instance_valid(f):
+			continue
+		f.effect_enabled = glyphs_on
+		if glyphs_on:
+			f.surface_render_mode = 0
+			f.shell_color = Color(0.02, 0.03, 0.06)
 
 
 func _apply_post_params() -> void:

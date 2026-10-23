@@ -36,29 +36,23 @@ index = clamp(int(lum * N), 0, N-1)
 | `glyph_billboard.gdshader` | 字符 billboard | 功能包内部 |
 | `ascii_post.gdshader` | 可选全屏后处理 | 场景可引用 |
 
-主玩法场景引用 `glyph_field.gd` 与 `ascii_ramp.tres`。全屏 `ascii_post.gdshader` 只给 `scenes/main.tscn` 演示用。
+主玩法场景在 `MeshInstance3D` 下挂 `GlyphField`（`glyph_field.gd` + `ascii_ramp.tres`）。
+全屏 `ascii_post.gdshader` 只给 `scenes/main.tscn` 演示用。
 
 导出 PCK 时排除 `tools/`（当前尚无 `export_presets.cfg`）。
 
-## 挂载式模型效果（推荐）
+## 用法
 
-把 `res://features/ascii/ascii_effect_3d.tscn` 拖到模型下作为子节点，
-或新建 Node3D 并挂载 `ascii_effect_3d.gd`。父节点可以是单个 MeshInstance3D，
-也可以是包含多个网格的导入模型根节点；组件自动遍历模型，处理所有三角形表面。
-也可用 `target_path` 指定模型。每个模型挂一个效果节点，避免作用范围重叠；
-不要与旧 GlyphField 同时挂在同一网格上。
+在带 `mesh` 的 `MeshInstance3D` 下挂一个 `GlyphField`。采样、MultiMesh、depth shell、
+Bayer 等最终观感由该节点自己负责（编辑器与运行时同一套，`@tool`）。节点可放在场景任意位置，
+只要父节点是目标网格。
 
-- `glyph_px`：单个字符的屏幕像素大小，不改变采样数量。
-- `density`：局部表面积上的采样密度倍率，越大字符越多。1 为默认值，4 对应间距减半。
-- `base_spacing`：基础局部空间采样间距；最终间距为 `base_spacing / sqrt(density)`，最小 0.05。
-- `enabled`：关闭时显示原模型；移除组件也会恢复原材质。
-- `ramp`、`tint`、`light_dir`、`ambient`、`background_color`：每个模型独立的字符外观。
+- `spacing` / `seed`：表面采样密度与随机种子；改动后编辑器会防抖重建。
+- `glyph_px`、`ramp`、`tint`、`dither_*`：字符外观。
+- `surface_render_mode`：`ASCII 3D` / `Bayer Model` / `ASCII + Bayer`（管理宿主材质与字符可见性）。
+- `effect_enabled`：关闭时恢复宿主原材质并隐藏字符（演示场景的「原始模型」）。
+- `manage_host_surface`：为 false 时不改宿主材质（仅生成字符点）。
+- `emissive_body`、`core_energy`、`hide_from_lens`：自发光体与黑洞透镜剔除等特例。
 
-编辑器和运行时都支持修改参数；密度调整合并延迟 0.25 秒再重建，字号即时更新。
-组件保留模型作为遮挡底面；生成节点不保存到场景。每个网格最多尝试 200000 个采样候选，
-高密度会增加重建耗时。非均匀缩放会影响实际世界空间密度。
-当前采样的是静态网格表面，支持模型整体移动旋转，不跟随骨骼蒙皮或 BlendShape 变形。
-
-验证：`godot --headless --path . --script tools/test_ascii_effect.gd`。
-
-独立参数演示：打开 scenes/ascii_components_demo.tscn，F6 运行。左侧球体大字低密度，右侧方块小字高密度。
+每个网格挂一个 `GlyphField`；不要在同一宿主上叠多个。采样上限约 200000 候选，
+间距过小会拖慢重建。只采静态网格表面，支持整体变换，不跟随骨骼 / BlendShape。

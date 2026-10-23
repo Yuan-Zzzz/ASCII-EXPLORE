@@ -2,10 +2,14 @@
 class_name GlyphField
 extends MultiMeshInstance3D
 ## 在 MeshInstance3D 表面生成字符点 MultiMesh（Three.js GlyphField 思路）。
+## 挂到宿主下即可：采样、depth shell、Bayer 表面模式由本节点统一处理。
 
 signal rebuilt
 
 const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
+const ModelDitherShader = preload("res://features/dither/bayer_model.gdshader")
+const LENS_LAYER := 10
+const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
 
 @export var ramp: AsciiRamp
 @export_range(0.05, 10.0, 0.005, "or_greater") var spacing: float = 0.35
@@ -24,6 +28,15 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 @export_range(0.0, 1.0, 0.05) var dither_lit_weight: float = 0.0
 ## Drop the host mesh from the black-hole lens cull mask so the lens samples sky without this body.
 @export var hide_from_lens: bool = false
+## ASCII 3D / Bayer Model / ASCII + Bayer — drives host depth shell and glyph visibility.
+@export_enum("ASCII 3D", "Bayer Model", "ASCII + Bayer") var surface_render_mode: int = 0
+## When false, restore the host's original materials and hide glyphs (raw / post demos).
+@export var effect_enabled: bool = true
+## Apply / restore parent MeshInstance3D materials for the chosen surface mode.
+@export var manage_host_surface: bool = true
+## Emissive host core multiplier (HDR albedo / emission energy).
+@export_range(0.0, 12.0, 0.1) var core_energy: float = 4.0
+@export var shell_color: Color = VOID_SHELL_COLOR
 @export var rebuild_on_ready: bool = true:
 	set(value):
 		rebuild_on_ready = value
@@ -31,6 +44,7 @@ const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 
 var _dither_mat: ShaderMaterial
 var _shader_mat: ShaderMaterial
+var _model_dither_mat: ShaderMaterial
 var _preview_mesh: Mesh
 var _preview_signature: Array = []
 var _preview_wait: float = 0.0
@@ -38,6 +52,10 @@ var _preview_dirty: bool = false
 var _preview_thread: Thread
 var _preview_revision: int = 0
 var _running_revision: int = 0
+var _saved_host_override: Material
+var _saved_host_overlay: Material
+var _host_captured: bool = false
+var _host_signature: Array = []
 
 
 # 自动重建的预览资源不写入场景；手动烘焙模式仍保留资源。
@@ -51,6 +69,9 @@ func _ready() -> void:
 	var host := get_parent() as MeshInstance3D
 	if host != null:
 		_preview_signature = [host.mesh, spacing, seed]
+		if hide_from_lens:
+			host.layers = host.layers & ~(1 << (LENS_LAYER - 1))
+	_sync_host_surface(true)
 	if rebuild_on_ready:
 		if Engine.is_editor_hint():
 			_queue_preview()
@@ -79,6 +100,7 @@ func _process(delta: float) -> void:
 		if _preview_wait <= 0.0 and _preview_thread == null:
 			_preview_dirty = false
 			_start_preview()
+	_sync_host_surface(false)
 	_apply_params()
 
 
@@ -92,6 +114,7 @@ func _exit_tree() -> void:
 	if _preview_thread != null:
 		_preview_thread.wait_to_finish()
 		_preview_thread = null
+	_restore_host_surface()
 
 
 func _start_preview() -> void:
@@ -215,6 +238,104 @@ func _apply_params() -> void:
 		material_overlay = _dither_mat
 	else:
 		material_overlay = null
+
+
+func _sync_host_surface(force: bool) -> void:
+	if not manage_host_surface:
+		return
+	var host := get_parent() as MeshInstance3D
+	if host == null:
+		return
+	var want_dither := effect_enabled and surface_render_mode == 2 and not emissive_body
+	if dither_enabled != want_dither:
+		dither_enabled = want_dither
+	var signature := [
+		effect_enabled,
+		surface_render_mode,
+		emissive_body,
+		tint,
+		shell_color,
+		core_energy,
+		emission_energy,
+		dither_pixel_size,
+		dither_color_levels,
+		dither_lit_weight,
+	]
+	if not force and signature == _host_signature:
+		_update_model_dither_params(host)
+		return
+	_host_signature = signature
+	_capture_host_if_needed(host)
+	if not effect_enabled:
+		visible = false
+		_restore_host_surface()
+		return
+	visible = surface_render_mode != 1
+	var material := StandardMaterial3D.new()
+	material.roughness = 1.0
+	if emissive_body:
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = _emissive_core_color(tint)
+		material.emission_enabled = true
+		material.emission = tint
+		material.emission_energy_multiplier = core_energy
+		host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	else:
+		if surface_render_mode != 1:
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = tint if surface_render_mode == 1 else shell_color
+		host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	host.material_override = material
+	host.material_overlay = null
+	if surface_render_mode == 1:
+		if _model_dither_mat == null:
+			_model_dither_mat = ShaderMaterial.new()
+			_model_dither_mat.shader = ModelDitherShader
+		host.material_overlay = _model_dither_mat
+		_update_model_dither_params(host)
+
+
+func _update_model_dither_params(host: MeshInstance3D) -> void:
+	if surface_render_mode != 1 or not effect_enabled:
+		return
+	var overlay := host.material_overlay as ShaderMaterial
+	if overlay == null:
+		return
+	overlay.set_shader_parameter("u_pixel_size", dither_pixel_size)
+	overlay.set_shader_parameter("u_color_levels", dither_color_levels)
+	overlay.set_shader_parameter("lit_weight", dither_lit_weight)
+	var material := host.material_override as StandardMaterial3D
+	if material == null:
+		return
+	if emissive_body:
+		material.albedo_color = _emissive_core_color(tint)
+		material.emission = tint
+		material.emission_energy_multiplier = core_energy
+	else:
+		material.albedo_color = tint
+
+
+func _emissive_core_color(color: Color) -> Color:
+	return Color(color.r * core_energy, color.g * core_energy, color.b * core_energy, 1.0)
+
+
+func _capture_host_if_needed(host: MeshInstance3D) -> void:
+	if _host_captured:
+		return
+	_saved_host_override = host.material_override
+	_saved_host_overlay = host.material_overlay
+	_host_captured = true
+
+
+func _restore_host_surface() -> void:
+	if not manage_host_surface or not _host_captured:
+		return
+	var host := get_parent() as MeshInstance3D
+	if host == null:
+		return
+	host.material_override = _saved_host_override
+	host.material_overlay = _saved_host_overlay
+	_host_signature = []
 
 
 func set_glyph_px(px: float) -> void:
