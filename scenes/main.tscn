@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" uid="uid://clkf00nau0v0l" path="res://assets/models/lowpoly_old_tv.blend" id="8_tipki"]
 [ext_resource type="PackedScene" uid="uid://dnh53y8eosn1h" path="res://assets/models/tree_2.blend" id="9_choun"]
 [ext_resource type="PackedScene" uid="uid://woi1ogsamfp2" path="res://assets/models/tree_3.blend" id="10_choun"]
+[ext_resource type="PackedScene" uid="uid://cuc5wf84tmaho" path="res://assets/models/campfire.blend" id="11_ya4ey"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -510,6 +511,19 @@ shell_color = Color(0, 0, 0, 0.4862745)
 metadata/_custom_type_script = "uid://m7v0m3kks34n"
 
 [node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=1526170229]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1508727, 0, 1.9194689)
-light_energy = 2.428
-omni_range = 22.051
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.003, 0.45, 2.343)
+light_color = Color(1, 0.55, 0.22, 1)
+light_energy = 3.2
+omni_range = 8.0
+
+[node name="campfire" parent="." unique_id=1203914501 instance=ExtResource("11_ya4ey")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.003, 0, 2.343)
+
+[node name="GlyphField" type="MultiMeshInstance3D" parent="campfire" unique_id=925681076]
+cast_shadow = 0
+script = ExtResource("4_glyph")
+ramp = ExtResource("2_ramp")
+spacing = 0.12
+seed = 2026
+emission_energy = 0.55
+core_energy = 0.45
