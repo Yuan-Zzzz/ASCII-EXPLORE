@@ -36,11 +36,12 @@ func _run() -> void:
 	var buffer: PackedFloat32Array = result.buffer
 	var rng := RandomNumberGenerator.new()
 	rng.seed = field.seed + 17
+	const STRIDE := 20  # transform(12) + color(4) + custom(4)
 	for i in field.multimesh.instance_count:
-		var offset := i * 16
+		var offset := i * STRIDE
 		assert(Vector3(buffer[offset+3], buffer[offset+7], buffer[offset+11]).is_equal_approx(reference.positions[i]))
 		var n: Vector3 = reference.normals[i]
-		assert(Color(buffer[offset+12], buffer[offset+13], buffer[offset+14], buffer[offset+15]).is_equal_approx(Color(n.x, n.y, n.z, rng.randf())))
+		assert(Color(buffer[offset+16], buffer[offset+17], buffer[offset+18], buffer[offset+19]).is_equal_approx(Color(n.x, n.y, n.z, rng.randf())))
 	print("SPACING_ASYNC_OK count=%d max_main_ms=%.2f elapsed_ms=%.2f" % [field.multimesh.instance_count, max_main_us/1000.0, (Time.get_ticks_usec()-start)/1000.0])
 	assert(max_main_us < 100000, "Spacing update must not block main thread for 100 ms")
 	# 节点退出时必须回收仍在运行的任务。

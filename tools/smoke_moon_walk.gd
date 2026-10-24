@@ -96,6 +96,14 @@ func _run() -> void:
 		_fail("moon spacing %s" % moon_field.spacing)
 		return
 
+	var glyph_deadline := Time.get_ticks_msec() + 30000
+	for field in [moon_field, earth_field, sun_field]:
+		while field._preview_dirty or field._preview_thread != null:
+			if Time.get_ticks_msec() > glyph_deadline:
+				_fail("glyph preview timed out")
+				return
+			await process_frame
+
 	var moon_n := _count(moon_field)
 	var earth_n := _count(earth_field)
 	if moon_n < 3000 or moon_n > 250000:

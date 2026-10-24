@@ -10,8 +10,12 @@ func _run() -> void:
 	for path in ["Moon/MoonMesh/GlyphField", "SkyPivot/Earth/GlyphField", "SkyPivot/SunHost/GlyphField"]:
 		main.get_node(path).spacing = 2.0
 	root.add_child(main)
-	await process_frame
-	await process_frame
+	var deadline := Time.get_ticks_msec() + 20000
+	for path in ["Moon/MoonMesh/GlyphField", "SkyPivot/Earth/GlyphField", "SkyPivot/SunHost/GlyphField"]:
+		var wait_field := main.get_node(path) as GlyphField
+		while wait_field._preview_dirty or wait_field._preview_thread != null or wait_field.multimesh == null:
+			assert(Time.get_ticks_msec() < deadline, "Glyph preview timed out")
+			await process_frame
 	assert(not main.has_node("BayerDither"))
 	for path in ["Moon/MoonMesh", "SkyPivot/Earth", "SkyPivot/SunHost"]:
 		var host = main.get_node(path)

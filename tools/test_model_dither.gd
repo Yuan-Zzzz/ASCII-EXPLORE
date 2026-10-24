@@ -7,8 +7,14 @@ func _run() -> void:
 	var scene := load("res://scenes/moon_walk.tscn") as PackedScene
 	var main := scene.instantiate()
 	root.add_child(main)
-	await process_frame
-	await process_frame
+	var fields: Array[GlyphField] = []
+	for path in ["Moon/MoonMesh", "SkyPivot/Earth", "SkyPivot/SunHost"]:
+		fields.append(main.get_node(path).get_node("GlyphField") as GlyphField)
+	var deadline := Time.get_ticks_msec() + 30000
+	for field in fields:
+		while field._preview_dirty or field._preview_thread != null:
+			assert(Time.get_ticks_msec() < deadline, "Glyph preview timed out")
+			await process_frame
 	assert(not main.has_node("BayerDither"), "Full-screen effect must be removed")
 	for path in ["Moon/MoonMesh", "SkyPivot/Earth", "SkyPivot/SunHost"]:
 		var host := main.get_node(path) as MeshInstance3D

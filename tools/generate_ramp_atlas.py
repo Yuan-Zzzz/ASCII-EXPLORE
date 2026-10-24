@@ -17,7 +17,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 
-DEFAULT_RAMP = " .:-=+*#%@"
+# 前 4 格为棱边方向字符（与 threejs EDGE_CHARS 对齐），其后为暗→亮阶梯
+DEFAULT_RAMP = "-/|\\ .:-=+*#%@"
+EDGE_CHARS = "-/|\\"
 
 
 def find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -44,53 +46,6 @@ def build_atlas(ramp: str, cell: int) -> Image.Image:
     return img
 
 
-def write_import(path: Path) -> None:
-    dest = f"res://.godot/imported/{path.name}.ctex"
-    path.with_suffix(path.suffix + ".import").write_text(
-        f"""[remap]
-
-importer="texture"
-type="CompressedTexture2D"
-uid="uid://ascii_ramp_atlas"
-path="{dest}"
-metadata={{
-"vram_texture": false
-}}
-
-[deps]
-
-source_file="res://features/ascii/{path.name}"
-dest_files=["{dest}"]
-
-[params]
-
-compress/mode=0
-compress/high_quality=false
-compress/lossy_quality=0.7
-compress/uastc_level=0
-compress/rdo_quality_loss=0.0
-compress/hdr_compression=1
-compress/normal_map=0
-compress/channel_pack=0
-mipmaps/generate=true
-mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
-process/channel_remap/red=0
-process/channel_remap/green=1
-process/channel_remap/blue=2
-process/channel_remap/alpha=3
-process/fix_alpha_border=false
-process/premult_alpha=false
-process/normal_map_invert_y=false
-process/hdr_as_srgb=false
-process/hdr_clamp_exposure=false
-process/size_limit=0
-detect_3d/compress_to=0
-"""
-    )
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ramp", default=DEFAULT_RAMP)
@@ -109,7 +64,7 @@ def main() -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     atlas = build_atlas(ramp, args.cell)
     atlas.save(args.out)
-    write_import(args.out)
+    # 保留既有 atlas.png.import（含 uid）；由 Godot 重新导入 .ctex
 
     print(f"ramp  = {ramp!r}  ({len(ramp)} chars, dark → bright)")
     print(f"atlas = {args.out}  ({atlas.size[0]}x{atlas.size[1]})")

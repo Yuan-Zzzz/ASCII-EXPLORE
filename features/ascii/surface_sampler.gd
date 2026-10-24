@@ -114,6 +114,103 @@ static func sample_arrays(arrays: Array, spacing: float, seed: int) -> Dictionar
 	return {"positions": positions, "normals": out_normals}
 
 
+## 特征棱等距采样。返回 { "positions": PackedVector3Array, "directions": PackedVector3Array }
+static func sample_edges(arrays: Array, step: float = 0.2, threshold_deg: float = 25.0) -> Dictionary:
+	step = maxf(step, 0.02)
+	if arrays.is_empty():
+		return {"positions": PackedVector3Array(), "directions": PackedVector3Array()}
+
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if verts.is_empty():
+		return {"positions": PackedVector3Array(), "directions": PackedVector3Array()}
+
+	var tris: Array[PackedInt32Array] = []
+	if indices.is_empty():
+		for i in range(0, verts.size() - 2, 3):
+			tris.append(PackedInt32Array([i, i + 1, i + 2]))
+	else:
+		for i in range(0, indices.size() - 2, 3):
+			tris.append(PackedInt32Array([indices[i], indices[i + 1], indices[i + 2]]))
+
+	# edge key (min,max) -> list of triangle face normals
+	var edge_faces: Dictionary = {}
+	for t in tris:
+		var a: Vector3 = verts[t[0]]
+		var b: Vector3 = verts[t[1]]
+		var c: Vector3 = verts[t[2]]
+		var fn: Vector3 = (b - a).cross(c - a)
+		if fn.length_squared() < 1e-12:
+			continue
+		fn = fn.normalized()
+		_edge_faces_add(edge_faces, t[0], t[1], fn)
+		_edge_faces_add(edge_faces, t[1], t[2], fn)
+		_edge_faces_add(edge_faces, t[2], t[0], fn)
+
+	var cos_thresh := cos(deg_to_rad(threshold_deg))
+	var pos := PackedVector3Array()
+	var dir := PackedVector3Array()
+	for key in edge_faces:
+		var faces: Array = edge_faces[key]
+		var keep := false
+		if faces.size() == 1:
+			keep = true
+		elif faces.size() >= 2:
+			var n0: Vector3 = faces[0]
+			var n1: Vector3 = faces[1]
+			# 夹角越大 dot 越小；超过阈值则保留
+			keep = n0.dot(n1) < cos_thresh
+		if not keep:
+			continue
+		var i0: int = key.x
+		var i1: int = key.y
+		var a: Vector3 = verts[i0]
+		var b: Vector3 = verts[i1]
+		var d: Vector3 = b - a
+		var length := d.length()
+		if length < 1e-5:
+			continue
+		d /= length
+		var n := maxi(1, int(round(length / step)))
+		for k in range(n + 1):
+			var t := float(k) / float(n)
+			pos.append(a.lerp(b, t))
+			dir.append(d)
+
+	return _dedupe_edges(pos, dir, step * 0.45)
+
+
+static func sample_mesh_edges(mesh: Mesh, step: float = 0.2, threshold_deg: float = 25.0) -> Dictionary:
+	return sample_edges(_mesh_arrays(mesh), step, threshold_deg)
+
+
+static func _edge_faces_add(edge_faces: Dictionary, i0: int, i1: int, fn: Vector3) -> void:
+	var key := Vector2i(mini(i0, i1), maxi(i0, i1))
+	if not edge_faces.has(key):
+		edge_faces[key] = []
+	edge_faces[key].append(fn)
+
+
+static func _dedupe_edges(pos: PackedVector3Array, dir: PackedVector3Array, eps: float) -> Dictionary:
+	eps = maxf(eps, 1e-4)
+	var seen: Dictionary = {}
+	var out_pos := PackedVector3Array()
+	var out_dir := PackedVector3Array()
+	for i in pos.size():
+		var p := pos[i]
+		var k := Vector3i(
+			int(round(p.x / eps)),
+			int(round(p.y / eps)),
+			int(round(p.z / eps))
+		)
+		if seen.has(k):
+			continue
+		seen[k] = true
+		out_pos.append(p)
+		out_dir.append(dir[i])
+	return {"positions": out_pos, "directions": out_dir}
+
+
 static func _mesh_arrays(mesh: Mesh) -> Array:
 	if mesh == null:
 		return []

@@ -36,10 +36,10 @@ glow_levels/4 = 0.25
 glow_intensity = 0.8
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cwcok"]
-shading_mode = 0
-albedo_color = Color(0, 0, 0, 1)
+albedo_color = Color(0.28, 0.55, 0.95, 1)
 
 [sub_resource type="SphereMesh" id="Mesh_earth"]
+material = SubResource("StandardMaterial3D_cwcok")
 radius = 96.0
 height = 192.0
 
@@ -49,12 +49,11 @@ shader = ExtResource("2_mfci8")
 shader_parameter/u_dither_pixel_size = 1.0
 shader_parameter/u_dither_color_levels = 4.0
 shader_parameter/u_atlas = ExtResource("3_ojxhs")
-shader_parameter/u_char_count = 10
+shader_parameter/u_char_count = 14
 shader_parameter/u_glyph_px = 22.065
 shader_parameter/u_viewport_size = Vector2(1280, 720)
 shader_parameter/u_depth_pull = 0.04
 shader_parameter/u_emission_energy = 0.0
-shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
 shader_parameter/u_mono = 0.0
 shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
 
@@ -63,6 +62,7 @@ shading_mode = 0
 albedo_color = Color(2.88, 2.06352, 0.5472, 1)
 
 [sub_resource type="SphereMesh" id="Mesh_sun"]
+material = SubResource("StandardMaterial3D_p71e7")
 radius = 400.0
 height = 800.0
 
@@ -89,8 +89,7 @@ photon_ring_width_rs = 0.22
 photon_ring_gain = 4.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y2bat"]
-shading_mode = 0
-albedo_color = Color(0, 0, 0, 1)
+albedo_color = Color(0.62, 0.72, 0.84, 1)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_uvcm7"]
 render_priority = 0
@@ -98,12 +97,11 @@ shader = ExtResource("2_mfci8")
 shader_parameter/u_dither_pixel_size = 1.0
 shader_parameter/u_dither_color_levels = 4.0
 shader_parameter/u_atlas = ExtResource("3_ojxhs")
-shader_parameter/u_char_count = 10
+shader_parameter/u_char_count = 14
 shader_parameter/u_glyph_px = 31.255
 shader_parameter/u_viewport_size = Vector2(1280, 720)
 shader_parameter/u_depth_pull = 0.04
 shader_parameter/u_emission_energy = 0.0
-shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
 shader_parameter/u_mono = 0.0
 shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
 
@@ -122,7 +120,6 @@ environment = SubResource("Environment_world")
 
 [node name="Earth" type="MeshInstance3D" parent="SkyPivot" unique_id=1566705265]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -369.769, 234.775, 716.765)
-material_override = SubResource("StandardMaterial3D_cwcok")
 mesh = SubResource("Mesh_earth")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="SkyPivot/Earth" unique_id=597855218]
@@ -133,13 +130,11 @@ ramp = ExtResource("3_ramp")
 spacing = 6.3
 seed = 21
 glyph_px = 22.065
-tint = Color(0.28, 0.55, 0.95, 1)
 dither_pixel_size = 1.0
 
 [node name="SunHost" type="MeshInstance3D" parent="SkyPivot" unique_id=1562244100]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.206, 2546.541, -3339.924)
 visible = false
-material_override = SubResource("StandardMaterial3D_p71e7")
 cast_shadow = 0
 mesh = SubResource("Mesh_sun")
 
@@ -150,7 +145,6 @@ script = ExtResource("4_glyph")
 ramp = ExtResource("3_ramp")
 spacing = 10.0
 seed = 10
-tint = Color(0.72, 0.51588, 0.1368, 1)
 emission_energy = 0.36
 dither_pixel_size = 1.0
 emissive_body = true
@@ -193,7 +187,7 @@ visible = false
 shape = ExtResource("9_moon_collision")
 
 [node name="MoonMesh" type="MeshInstance3D" parent="Moon" unique_id=60990136]
-material_override = SubResource("StandardMaterial3D_y2bat")
+surface_material_override/0 = SubResource("StandardMaterial3D_y2bat")
 mesh = ExtResource("8_moon_model")
 
 [node name="GlyphField" type="MultiMeshInstance3D" parent="Moon/MoonMesh" unique_id=2055741752]
@@ -202,9 +196,9 @@ cast_shadow = 0
 script = ExtResource("4_glyph")
 ramp = ExtResource("3_ramp")
 spacing = 0.05
+edge_step = 0.12
 seed = 165
 glyph_px = 31.255
-tint = Color(0.62, 0.72, 0.84, 1)
 dither_pixel_size = 1.0
 hide_from_lens = true
 

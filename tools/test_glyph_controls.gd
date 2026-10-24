@@ -8,9 +8,12 @@ func _run() -> void:
 	# 固定测试密度，不依赖用户当前场景中的美术参数。
 	scene.get_node("Moon/MoonMesh/GlyphField").spacing = 1.1
 	root.add_child(scene)
-	await process_frame
 	var controls = scene.get_node("AsciiLayer/GlyphControls")
 	var field = scene.get_node("Moon/MoonMesh/GlyphField")
+	var deadline := Time.get_ticks_msec() + 20000
+	while field._preview_dirty or field._preview_thread != null or field.multimesh == null:
+		assert(Time.get_ticks_msec() < deadline, "Initial glyph preview timed out")
+		await process_frame
 	var initial: int = field.multimesh.instance_count
 	controls._density.value = 2.0
 	await create_timer(0.5).timeout

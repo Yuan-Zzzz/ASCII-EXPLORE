@@ -80,12 +80,13 @@ func _run() -> void:
 	await _settle(field)
 	assert(field.multimesh.instance_count < initial, "Inspector spacing must rebuild preview")
 	field.glyph_px = 9.0
-	field.tint = Color(0.8, 0.6, 0.4)
+	field.light_direction = Vector3(0.2, 1.0, 0.1)
 	await process_frame
 	await process_frame
 	var mat := field.material_override as ShaderMaterial
 	assert(is_equal_approx(mat.get_shader_parameter("u_glyph_px"), 9.0))
-	assert(mat.get_shader_parameter("u_tint") == Vector3(0.8, 0.6, 0.4))
+	var light: Vector3 = mat.get_shader_parameter("u_light_dir")
+	assert(light.normalized().dot(Vector3(0.2, 1.0, 0.1).normalized()) > 0.99)
 	assert(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED, "Editor must keep mouse free")
 	print("EDITOR_PREVIEW_OK moon=%d earth=%d" % [field.multimesh.instance_count, earth.multimesh.instance_count])
 	scene.free()

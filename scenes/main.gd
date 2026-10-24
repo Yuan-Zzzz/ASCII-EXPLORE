@@ -14,10 +14,10 @@ enum ViewMode { GLYPHS, RAW, POST }
 @onready var overlay: ColorRect = $AsciiLayer/AsciiOverlay
 @onready var hint: Label = $AsciiLayer/Hint
 @onready var camera: Camera3D = $Camera3D
-@onready var pivot: Node3D = $Pivot
-@onready var ground: MeshInstance3D = $Pivot/Ground
-@onready var earth: MeshInstance3D = $Pivot/Earth
-@onready var sun_ball: MeshInstance3D = $Pivot/SunBall
+@onready var pivot: Node3D = self
+@onready var ground: MeshInstance3D = $Ground
+@onready var earth: MeshInstance3D = $Earth
+@onready var sun_ball: MeshInstance3D = $SunBall
 
 var _post_mat: ShaderMaterial
 var _yaw := 0.35
@@ -90,6 +90,8 @@ func _build_glyph_fields() -> void:
 
 
 func _append_glyph_field(host: Node) -> void:
+	if host == null:
+		return
 	for child in host.get_children():
 		if child.get_script() == GlyphFieldScript:
 			_glyph_fields.append(child)

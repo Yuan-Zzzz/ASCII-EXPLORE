@@ -14,16 +14,15 @@ func _run() -> void:
 
 	var main: Node = packed.instantiate()
 	root.add_child(main)
-	await process_frame
-	await process_frame
 
 	var GlyphFieldScript = load("res://features/ascii/glyph_field.gd")
 	var hosts: Array[NodePath] = [
-		^"Pivot/Ground",
-		^"Pivot/Earth",
-		^"Pivot/SunBall",
+		^"Ground",
+		^"Earth",
+		^"SunBall",
 	]
 	var fields: Array[Dictionary] = []
+	var deadline := Time.get_ticks_msec() + 20000
 	for host_path in hosts:
 		var host := main.get_node_or_null(host_path) as MeshInstance3D
 		if host == null:
@@ -33,13 +32,18 @@ func _run() -> void:
 		for child in host.get_children():
 			if child.get_script() != GlyphFieldScript:
 				continue
+			var field := child as GlyphField
+			while field._preview_dirty or field._preview_thread != null:
+				if Time.get_ticks_msec() > deadline:
+					break
+				await process_frame
 			var mm: MultiMesh = child.get("multimesh") as MultiMesh
 			found.append({
 				"name": child.name,
 				"spacing": child.get("spacing"),
+				"edge_step": child.get("edge_step"),
 				"seed": child.get("seed"),
 				"glyph_px": child.get("glyph_px"),
-				"tint": _color_to_array(child.get("tint")),
 				"rebuild_on_ready": child.get("rebuild_on_ready"),
 				"ramp_path": _resource_path(child.get("ramp")),
 				"instance_count": mm.instance_count if mm else 0,

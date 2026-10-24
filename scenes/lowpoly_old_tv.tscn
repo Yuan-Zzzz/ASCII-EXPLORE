@@ -1,157 +1,17 @@
 [gd_scene format=3 uid="uid://bbvxf41ghktn1"]
 
 [ext_resource type="PackedScene" uid="uid://cayo73sgmoenq" path="res://assets/models/lowpoly_old_tv.blend" id="1_1253x"]
-[ext_resource type="Shader" uid="uid://bnyvf8ki168kd" path="res://features/ascii/glyph_bayer_overlay.gdshader" id="2_3awht"]
 [ext_resource type="Script" uid="uid://m7v0m3kks34n" path="res://features/ascii/glyph_field.gd" id="2_jeimr"]
-[ext_resource type="Texture2D" uid="uid://8mhsgvqloewl" path="res://features/ascii/atlas.png" id="3_muktx"]
 [ext_resource type="Resource" uid="uid://b0twgmr8b5juc" path="res://features/ascii/ascii_ramp.tres" id="3_ougwy"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gchbw"]
-shading_mode = 0
-albedo_color = Color(0, 0, 0, 1)
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_o5r5s"]
-render_priority = 0
-shader = ExtResource("2_3awht")
-shader_parameter/u_dither_pixel_size = 2.0
-shader_parameter/u_dither_color_levels = 4.0
-shader_parameter/u_atlas = ExtResource("3_muktx")
-shader_parameter/u_char_count = 10
-shader_parameter/u_glyph_px = 49.835
-shader_parameter/u_viewport_size = Vector2(1280, 720)
-shader_parameter/u_depth_pull = 0.04
-shader_parameter/u_emission_energy = 0.0
-shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
-shader_parameter/u_mono = 0.0
-shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_clecv"]
-shading_mode = 0
-albedo_color = Color(0, 0, 0, 1)
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_3y6vn"]
-render_priority = 0
-shader = ExtResource("2_3awht")
-shader_parameter/u_dither_pixel_size = 2.0
-shader_parameter/u_dither_color_levels = 4.0
-shader_parameter/u_atlas = ExtResource("3_muktx")
-shader_parameter/u_char_count = 10
-shader_parameter/u_glyph_px = 12.0
-shader_parameter/u_viewport_size = Vector2(1280, 720)
-shader_parameter/u_depth_pull = 0.04
-shader_parameter/u_emission_energy = 0.0
-shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
-shader_parameter/u_mono = 0.0
-shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pks0t"]
-shading_mode = 0
-albedo_color = Color(0, 0, 0, 1)
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_gdxvh"]
-render_priority = 0
-shader = ExtResource("2_3awht")
-shader_parameter/u_dither_pixel_size = 2.0
-shader_parameter/u_dither_color_levels = 4.0
-shader_parameter/u_atlas = ExtResource("3_muktx")
-shader_parameter/u_char_count = 10
-shader_parameter/u_glyph_px = 37.28
-shader_parameter/u_viewport_size = Vector2(1280, 720)
-shader_parameter/u_depth_pull = 0.04
-shader_parameter/u_emission_energy = 0.0
-shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
-shader_parameter/u_mono = 0.0
-shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yw20h"]
-shading_mode = 0
-albedo_color = Color(0, 0, 0, 1)
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_dymk1"]
-render_priority = 0
-shader = ExtResource("2_3awht")
-shader_parameter/u_dither_pixel_size = 2.0
-shader_parameter/u_dither_color_levels = 4.0
-shader_parameter/u_atlas = ExtResource("3_muktx")
-shader_parameter/u_char_count = 10
-shader_parameter/u_glyph_px = 73.77
-shader_parameter/u_viewport_size = Vector2(1280, 720)
-shader_parameter/u_depth_pull = 0.04
-shader_parameter/u_emission_energy = 0.0
-shader_parameter/u_tint = Vector3(0.85, 0.9, 1)
-shader_parameter/u_mono = 0.0
-shader_parameter/u_mono_color = Vector3(0.78, 0.92, 1)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3bm4m"]
-shading_mode = 0
-albedo_color = Color(0.57436264, 1.2055664, 1.5228446, 1)
 
 [node name="lowpoly_old_tv" unique_id=1535630749 instance=ExtResource("1_1253x")]
 
-[node name="TV_Antenna" parent="Lowpoly_Old_TV" parent_id_path=PackedInt32Array(1935668305) index="0" unique_id=1809564485]
-material_override = SubResource("StandardMaterial3D_gchbw")
-
-[node name="GlyphField" type="MultiMeshInstance3D" parent="Lowpoly_Old_TV/TV_Antenna" index="0" unique_id=1320888324]
-material_overlay = SubResource("ShaderMaterial_o5r5s")
-cast_shadow = 0
-script = ExtResource("2_jeimr")
-ramp = ExtResource("3_ougwy")
-spacing = 0.04
-seed = 51
-glyph_px = 49.835
-tint = Color(0.7, 0.72, 0.78, 1)
-core_energy = 1.6
-
-[node name="TV_Bezel" parent="Lowpoly_Old_TV" parent_id_path=PackedInt32Array(1935668305) index="1" unique_id=546495407]
-material_override = SubResource("StandardMaterial3D_clecv")
-
-[node name="GlyphField" type="MultiMeshInstance3D" parent="Lowpoly_Old_TV/TV_Bezel" index="0" unique_id=672504314]
-material_overlay = SubResource("ShaderMaterial_3y6vn")
-cast_shadow = 0
-script = ExtResource("2_jeimr")
-ramp = ExtResource("3_ougwy")
-spacing = 0.08
-seed = 31
-tint = Color(0.25, 0.28, 0.32, 1)
-
-[node name="TV_Cabinet" parent="Lowpoly_Old_TV" parent_id_path=PackedInt32Array(1935668305) index="2" unique_id=1287719727]
-material_override = SubResource("StandardMaterial3D_pks0t")
-
-[node name="GlyphField" type="MultiMeshInstance3D" parent="Lowpoly_Old_TV/TV_Cabinet" index="0" unique_id=55298836]
-material_overlay = SubResource("ShaderMaterial_gdxvh")
+[node name="GlyphField" type="MultiMeshInstance3D" parent="." unique_id=9001001]
 cast_shadow = 0
 script = ExtResource("2_jeimr")
 ramp = ExtResource("3_ougwy")
 spacing = 0.05
+edge_step = 0.04
+edge_threshold = 25.0
 seed = 11
-glyph_px = 37.28
-tint = Color(0.72, 0.55, 0.35, 1)
-
-[node name="TV_Controls" parent="Lowpoly_Old_TV" parent_id_path=PackedInt32Array(1935668305) index="3" unique_id=1980118787]
-material_override = SubResource("StandardMaterial3D_yw20h")
-
-[node name="GlyphField" type="MultiMeshInstance3D" parent="Lowpoly_Old_TV/TV_Controls" index="0" unique_id=1617959864]
-material_overlay = SubResource("ShaderMaterial_dymk1")
-cast_shadow = 0
-script = ExtResource("2_jeimr")
-ramp = ExtResource("3_ougwy")
-spacing = 0.05
-seed = 41
-glyph_px = 73.77
-tint = Color(0.85, 0.82, 0.75, 1)
-
-[node name="TV_Screen" parent="Lowpoly_Old_TV" parent_id_path=PackedInt32Array(1935668305) index="4" unique_id=687129475]
-material_override = SubResource("StandardMaterial3D_3bm4m")
-cast_shadow = 0
-
-[node name="GlyphField" type="MultiMeshInstance3D" parent="Lowpoly_Old_TV/TV_Screen" index="0" unique_id=1205894088]
-cast_shadow = 0
-script = ExtResource("2_jeimr")
-ramp = ExtResource("3_ougwy")
-spacing = 0.05
-seed = 21
-glyph_px = 11.395
-tint = Color(0.35897663, 0.753479, 0.9517779, 1)
-emissive_body = true
-core_energy = 1.6
-shell_color = Color(1, 1, 1, 1)
+glyph_px = 14.0

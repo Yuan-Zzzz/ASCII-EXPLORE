@@ -1,20 +1,26 @@
 @tool
 class_name GlyphField
 extends MultiMeshInstance3D
-## 在 MeshInstance3D 表面生成字符点 MultiMesh（Three.js GlyphField 思路）。
-## 挂到宿主下即应用 ASCII + Bayer：采样、depth shell、字形 Bayer 由本节点统一处理。
+## 在 Mesh 表面 / 特征棱生成字符点（对齐 threejs GlyphField）。
+## 单网格：挂在 MeshInstance3D 下。场景级：挂在父节点下，自动覆盖子树全部网格。
+## 颜色取自宿主材质 albedo；无 tint。
 
 signal rebuilt
 
 const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
 const LENS_LAYER := 10
 const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
+const EDGE_CHILD := &"__GlyphEdge"
+const MANAGED_META := &"_glyph_field_owner"
 
 @export var ramp: AsciiRamp
 @export_range(0.05, 10.0, 0.005, "or_greater") var spacing: float = 0.35
+@export_range(0.02, 10.0, 0.005, "or_greater") var edge_step: float = 0.2
+@export_range(1.0, 89.0, 0.5) var edge_threshold: float = 25.0
+@export var sample_surface: bool = true
+@export var sample_edges: bool = true
 @export var seed: int = 1
 @export var glyph_px: float = 12.0
-@export var tint: Color = Color(0.85, 0.9, 1.0)
 @export var emission_energy: float = 0.0
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
@@ -27,59 +33,50 @@ const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
 ## Emissive host core multiplier (HDR albedo / emission energy).
 @export_range(0.0, 12.0, 0.1) var core_energy: float = 4.0
 @export var shell_color: Color = VOID_SHELL_COLOR
+@export var light_direction: Vector3 = Vector3(0.45, 0.75, 0.4)
+@export_range(0.0, 1.0, 0.01) var ambient: float = 0.22
+## 场景模式下采样根；空则用本节点的父节点。
+@export var root_path: NodePath = NodePath()
 @export var rebuild_on_ready: bool = true:
 	set(value):
 		rebuild_on_ready = value
 		notify_property_list_changed()
 
-var _dither_mat: ShaderMaterial
-var _shader_mat: ShaderMaterial
-var _preview_mesh: Mesh
-var _preview_signature: Array = []
 var _preview_wait: float = 0.0
 var _preview_dirty: bool = false
 var _preview_thread: Thread
 var _preview_revision: int = 0
 var _running_revision: int = 0
-var _saved_host_override: Material
-var _saved_host_overlay: Material
-var _host_captured: bool = false
-var _host_signature: Array = []
+var _preview_signature: Array = []
+var _pending_jobs: Array = []
+
+# host_id -> { override, overlay, albedo, emissive, emission_color }
+var _host_state: Dictionary = {}
+var _managed: Array[Dictionary] = []
+var _mono: float = 0.0
+var _dither_cache: Dictionary = {}  # key "edge"|"surface" -> ShaderMaterial
 
 
-# 自动重建的预览资源不写入场景；手动烘焙模式仍保留资源。
 func _validate_property(property: Dictionary) -> void:
-	if rebuild_on_ready and property.name in [&"multimesh", &"material_override"]:
+	if rebuild_on_ready and property.name in [&"multimesh", &"material_override", &"material_overlay"]:
 		property.usage = int(property.usage) & ~PROPERTY_USAGE_STORAGE
 
 
 func _ready() -> void:
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
-	var host := get_parent() as MeshInstance3D
-	if host != null:
-		_preview_signature = [host.mesh, spacing, seed]
-		if hide_from_lens:
+	if hide_from_lens:
+		for host in _iter_hosts():
 			host.layers = host.layers & ~(1 << (LENS_LAYER - 1))
-	_sync_host_surface(true)
+	_sync_all_hosts(true)
 	if rebuild_on_ready:
-		if Engine.is_editor_hint():
-			_queue_preview()
-		else:
-			_rebuild_sync()
+		# 表面+棱边采样可能很重：编辑器与运行时都走后台线程，避免卡住主线程。
+		_queue_preview()
+		if not Engine.is_editor_hint():
+			_preview_wait = 0.0
 
 
-# 编辑器只在采样输入变化后重建，拖动检查器参数时合并更新。
 func _process(delta: float) -> void:
-	var host := get_parent() as MeshInstance3D
-	if host == null:
-		return
-	if _preview_mesh != host.mesh:
-		if is_instance_valid(_preview_mesh) and _preview_mesh.changed.is_connected(_queue_preview):
-			_preview_mesh.changed.disconnect(_queue_preview)
-		_preview_mesh = host.mesh
-		if _preview_mesh != null:
-			_preview_mesh.changed.connect(_queue_preview)
-	var signature := [host.mesh, spacing, seed]
+	var signature := _input_signature()
 	if signature != _preview_signature:
 		_preview_signature = signature
 		_queue_preview()
@@ -89,8 +86,8 @@ func _process(delta: float) -> void:
 		if _preview_wait <= 0.0 and _preview_thread == null:
 			_preview_dirty = false
 			_start_preview()
-	_sync_host_surface(false)
-	_apply_params()
+	_sync_all_hosts(false)
+	_apply_params_all()
 
 
 func _queue_preview() -> void:
@@ -103,19 +100,79 @@ func _exit_tree() -> void:
 	if _preview_thread != null:
 		_preview_thread.wait_to_finish()
 		_preview_thread = null
-	_restore_host_surface()
+	_restore_all_hosts()
+	_clear_managed()
+
+
+func _is_scene_mode() -> bool:
+	var parent_mesh := get_parent() as MeshInstance3D
+	return parent_mesh == null or parent_mesh.mesh == null
+
+
+func _sample_root() -> Node:
+	if root_path != NodePath() and has_node(root_path):
+		return get_node(root_path)
+	if _is_scene_mode():
+		return get_parent()
+	return get_parent()
+
+
+func _iter_hosts() -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	if not _is_scene_mode():
+		var host := get_parent() as MeshInstance3D
+		if host != null and host.mesh != null:
+			out.append(host)
+		return out
+	var root := _sample_root()
+	if root == null:
+		return out
+	_collect_meshes(root, out)
+	return out
+
+
+func _collect_meshes(node: Node, out: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null and not _is_managed_node(mi):
+			out.append(mi)
+	for child in node.get_children():
+		if child == self:
+			continue
+		if child is GlyphField:
+			continue
+		_collect_meshes(child, out)
+
+
+func _is_managed_node(node: Node) -> bool:
+	return node.has_meta(MANAGED_META)
+
+
+func _input_signature() -> Array:
+	var meshes: Array = []
+	for host in _iter_hosts():
+		meshes.append(host.mesh)
+	return [meshes, spacing, edge_step, edge_threshold, sample_surface, sample_edges, seed]
 
 
 func _start_preview() -> void:
-	var host := get_parent() as MeshInstance3D
-	if host == null or host.mesh == null:
-		multimesh = null
+	var jobs: Array = []
+	for host in _iter_hosts():
+		jobs.append({
+			"host_id": host.get_instance_id(),
+			"arrays": SurfaceSamplerScript._mesh_arrays(host.mesh),
+			"albedo": _resolve_albedo(host),
+			"emissive": _resolve_emissive(host),
+		})
+	if jobs.is_empty():
+		_clear_outputs()
 		return
-	# Mesh 数据只在主线程读取，后台仅计算独立的数组。
-	var arrays := SurfaceSamplerScript._mesh_arrays(host.mesh)
 	_running_revision = _preview_revision
 	_preview_thread = Thread.new()
-	var error := _preview_thread.start(_build_buffer.bind(arrays, spacing, seed), Thread.PRIORITY_LOW)
+	var error := _preview_thread.start(
+		_build_jobs.bind(jobs, spacing, edge_step, edge_threshold, sample_surface, sample_edges, seed),
+		Thread.PRIORITY_LOW
+	)
 	if error != OK:
 		_preview_thread = null
 		push_warning("无法启动字形预览线程：%s" % error)
@@ -124,14 +181,13 @@ func _start_preview() -> void:
 func _poll_preview() -> void:
 	if _preview_thread == null or _preview_thread.is_alive():
 		return
-	var result: Dictionary = _preview_thread.wait_to_finish()
+	var result: Array = _preview_thread.wait_to_finish()
 	_preview_thread = null
 	if _running_revision == _preview_revision:
-		_apply_buffer(result)
+		_apply_jobs(result)
 
 
 func rebuild() -> void:
-	# 编辑器和运行时控制面板均合并快速调参，保留旧预览直到新结果完成。
 	if is_inside_tree():
 		_queue_preview()
 		return
@@ -139,179 +195,477 @@ func rebuild() -> void:
 
 
 func _rebuild_sync() -> void:
-	var host := get_parent() as MeshInstance3D
-	if host == null or host.mesh == null:
-		multimesh = null
-		push_warning("GlyphField 需要挂在带 mesh 的 MeshInstance3D 下")
+	var jobs: Array = []
+	for host in _iter_hosts():
+		jobs.append({
+			"host_id": host.get_instance_id(),
+			"arrays": SurfaceSamplerScript._mesh_arrays(host.mesh),
+			"albedo": _resolve_albedo(host),
+			"emissive": _resolve_emissive(host),
+		})
+	if jobs.is_empty():
+		_clear_outputs()
+		push_warning("GlyphField 未找到可采样的 MeshInstance3D")
 		return
-	_apply_buffer(_build_buffer(SurfaceSamplerScript._mesh_arrays(host.mesh), spacing, seed))
+	_apply_jobs(_build_jobs(jobs, spacing, edge_step, edge_threshold, sample_surface, sample_edges, seed))
+
+
+static func _build_jobs(
+	jobs: Array,
+	gap: float,
+	estep: float,
+	ethresh: float,
+	do_surface: bool,
+	do_edges: bool,
+	sample_seed: int
+) -> Array:
+	var out: Array = []
+	for job in jobs:
+		var built := _build_host_buffers(
+			job["arrays"],
+			gap,
+			estep,
+			ethresh,
+			do_surface,
+			do_edges,
+			sample_seed,
+			job["albedo"],
+			job.get("emissive", false)
+		)
+		built["host_id"] = job["host_id"]
+		built["albedo"] = job["albedo"]
+		built["emissive"] = job.get("emissive", false)
+		out.append(built)
+	return out
 
 
 static func _build_buffer(arrays: Array, gap: float, sample_seed: int) -> Dictionary:
-	var sampled: Dictionary = SurfaceSamplerScript.sample_arrays(arrays, maxf(gap, 0.05), sample_seed)
-	var positions: PackedVector3Array = sampled["positions"]
-	var normals: PackedVector3Array = sampled["normals"]
-	var buffer := PackedFloat32Array()
-	buffer.resize(positions.size() * 16)
+	## 兼容旧测试：仅表面采样。
+	var built := _build_host_buffers(arrays, gap, gap * 0.6, 25.0, true, false, sample_seed, Color.WHITE, false)
+	return {"buffer": built["surface_buffer"], "count": built["surface_count"], "stride": 20}
+
+
+static func _build_host_buffers(
+	arrays: Array,
+	gap: float,
+	estep: float,
+	ethresh: float,
+	do_surface: bool,
+	do_edges: bool,
+	sample_seed: int,
+	albedo: Color,
+	emissive: bool
+) -> Dictionary:
+	var surface_buffer := PackedFloat32Array()
+	var surface_count := 0
+	var edge_buffer := PackedFloat32Array()
+	var edge_count := 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = sample_seed + 17
-	for i in positions.size():
-		var offset := i * 16
-		var p := positions[i]
-		var n := normals[i]
-		buffer[offset] = 1.0
-		buffer[offset + 3] = p.x
-		buffer[offset + 5] = 1.0
-		buffer[offset + 7] = p.y
-		buffer[offset + 10] = 1.0
-		buffer[offset + 11] = p.z
-		buffer[offset + 12] = n.x
-		buffer[offset + 13] = n.y
-		buffer[offset + 14] = n.z
-		buffer[offset + 15] = rng.randf()
-	return {"buffer": buffer, "count": positions.size()}
+	var color := albedo
+	if emissive:
+		color = Color(
+			minf(albedo.r * 1.4, 2.0),
+			minf(albedo.g * 1.4, 2.0),
+			minf(albedo.b * 1.4, 2.0),
+			1.0
+		)
+
+	# MultiMesh stride: transform(12) + color(4) + custom(4) = 20
+	const STRIDE := 20
+
+	if do_surface:
+		var sampled: Dictionary = SurfaceSamplerScript.sample_arrays(arrays, maxf(gap, 0.05), sample_seed)
+		var positions: PackedVector3Array = sampled["positions"]
+		var normals: PackedVector3Array = sampled["normals"]
+		surface_count = positions.size()
+		surface_buffer.resize(surface_count * STRIDE)
+		for i in surface_count:
+			_pack_instance(surface_buffer, i * STRIDE, positions[i], normals[i], color, rng.randf())
+
+	if do_edges:
+		var edges: Dictionary = SurfaceSamplerScript.sample_edges(arrays, maxf(estep, 0.02), ethresh)
+		var epos: PackedVector3Array = edges["positions"]
+		var edir: PackedVector3Array = edges["directions"]
+		edge_count = epos.size()
+		edge_buffer.resize(edge_count * STRIDE)
+		for i in edge_count:
+			_pack_instance(edge_buffer, i * STRIDE, epos[i], edir[i], color, rng.randf())
+
+	return {
+		"surface_buffer": surface_buffer,
+		"surface_count": surface_count,
+		"edge_buffer": edge_buffer,
+		"edge_count": edge_count,
+	}
 
 
-func _apply_buffer(result: Dictionary) -> void:
+static func _pack_instance(
+	buffer: PackedFloat32Array,
+	offset: int,
+	p: Vector3,
+	custom_xyz: Vector3,
+	color: Color,
+	seed_v: float
+) -> void:
+	buffer[offset] = 1.0
+	buffer[offset + 3] = p.x
+	buffer[offset + 5] = 1.0
+	buffer[offset + 7] = p.y
+	buffer[offset + 10] = 1.0
+	buffer[offset + 11] = p.z
+	buffer[offset + 12] = color.r
+	buffer[offset + 13] = color.g
+	buffer[offset + 14] = color.b
+	buffer[offset + 15] = color.a
+	buffer[offset + 16] = custom_xyz.x
+	buffer[offset + 17] = custom_xyz.y
+	buffer[offset + 18] = custom_xyz.z
+	buffer[offset + 19] = seed_v
+
+
+func _apply_jobs(results: Array) -> void:
 	if ramp == null:
 		ramp = load("res://features/ascii/ascii_ramp.tres") as AsciiRamp
-	if result.count == 0:
+	_clear_managed()
+	_managed.clear()
+
+	if _is_scene_mode():
 		multimesh = null
-		rebuilt.emit()
+		material_override = null
+		material_overlay = null
+		for result in results:
+			var host := instance_from_id(result["host_id"]) as MeshInstance3D
+			if host == null or not is_instance_valid(host):
+				continue
+			var surface_mmi := _make_mmi(host, false)
+			var edge_mmi := _make_mmi(host, true)
+			_fill_mmi(surface_mmi, result["surface_buffer"], result["surface_count"], false)
+			_fill_mmi(edge_mmi, result["edge_buffer"], result["edge_count"], true)
+			_managed.append({
+				"host": host,
+				"surface": surface_mmi,
+				"edge": edge_mmi,
+				"emissive": result.get("emissive", false) or emissive_body,
+			})
+	else:
+		var result: Dictionary = results[0] if not results.is_empty() else {}
+		if result.is_empty():
+			_clear_outputs()
+			rebuilt.emit()
+			return
+		_fill_self(result["surface_buffer"], result["surface_count"], false)
+		var edge_mmi := get_node_or_null(NodePath(EDGE_CHILD)) as MultiMeshInstance3D
+		if edge_mmi == null:
+			edge_mmi = MultiMeshInstance3D.new()
+			edge_mmi.name = String(EDGE_CHILD)
+			edge_mmi.cast_shadow = SHADOW_CASTING_SETTING_OFF
+			add_child(edge_mmi)
+			if Engine.is_editor_hint():
+				edge_mmi.owner = owner
+		_fill_mmi(edge_mmi, result["edge_buffer"], result["edge_count"], true)
+		_managed.append({
+			"host": get_parent(),
+			"surface": self,
+			"edge": edge_mmi,
+			"emissive": result.get("emissive", false) or emissive_body,
+		})
+
+	_apply_params_all()
+	_sync_all_hosts(true)
+	rebuilt.emit()
+
+
+func _make_mmi(host: MeshInstance3D, is_edge: bool) -> MultiMeshInstance3D:
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "__GlyphEdge" if is_edge else "__GlyphSurface"
+	mmi.cast_shadow = SHADOW_CASTING_SETTING_OFF
+	mmi.set_meta(MANAGED_META, get_instance_id())
+	host.add_child(mmi)
+	if Engine.is_editor_hint():
+		mmi.owner = owner
+	return mmi
+
+
+func _fill_self(buffer: PackedFloat32Array, count: int, is_edge: bool) -> void:
+	if count <= 0:
+		multimesh = null
 		return
+	multimesh = _new_multimesh(buffer, count)
+	_ensure_material(self, is_edge)
+
+
+func _fill_mmi(mmi: MultiMeshInstance3D, buffer: PackedFloat32Array, count: int, is_edge: bool) -> void:
+	if mmi == null:
+		return
+	if count <= 0:
+		mmi.multimesh = null
+		mmi.visible = false
+		return
+	mmi.visible = effect_enabled
+	mmi.multimesh = _new_multimesh(buffer, count)
+	_ensure_material(mmi, is_edge)
+
+
+func _new_multimesh(buffer: PackedFloat32Array, count: int) -> MultiMesh:
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
 	mm.use_custom_data = true
 	mm.mesh = quad
-	mm.instance_count = result.count
-	mm.buffer = result.buffer
-	multimesh = mm
-	_ensure_material()
-	_apply_params()
-	rebuilt.emit()
+	mm.instance_count = count
+	mm.buffer = buffer
+	return mm
 
 
-func _ensure_material() -> void:
-	if _shader_mat != null:
-		material_override = _shader_mat
-		return
+func _ensure_material(mmi: MultiMeshInstance3D, is_edge: bool) -> void:
 	var sh: Shader = load("res://features/ascii/glyph_billboard.gdshader") as Shader
-	_shader_mat = ShaderMaterial.new()
-	_shader_mat.shader = sh
-	material_override = _shader_mat
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	mmi.material_override = mat
+	mmi.set_meta(&"_is_edge", is_edge)
 
 
-func _glyph_dither_wanted() -> bool:
-	return effect_enabled and not emissive_body
+func _clear_outputs() -> void:
+	multimesh = null
+	material_override = null
+	material_overlay = null
+	_clear_managed()
+	var edge := get_node_or_null(NodePath(EDGE_CHILD)) as MultiMeshInstance3D
+	if edge != null:
+		edge.multimesh = null
 
 
-func _apply_params() -> void:
-	if _shader_mat == null or ramp == null:
+func _clear_managed() -> void:
+	for entry in _managed:
+		if entry.get("surface") == self:
+			continue
+		var surface: MultiMeshInstance3D = entry.get("surface")
+		var edge: MultiMeshInstance3D = entry.get("edge")
+		if is_instance_valid(surface) and surface != self:
+			surface.queue_free()
+		if is_instance_valid(edge) and edge.get_parent() != self:
+			edge.queue_free()
+		elif is_instance_valid(edge) and edge.get_parent() == self and _is_scene_mode():
+			edge.queue_free()
+	_managed.clear()
+	# 清理残留托管节点
+	for host in _iter_hosts():
+		for child in host.get_children():
+			if child.has_meta(MANAGED_META) and child.get_meta(MANAGED_META) == get_instance_id():
+				child.queue_free()
+
+
+func _glyph_targets() -> Array[MultiMeshInstance3D]:
+	var out: Array[MultiMeshInstance3D] = []
+	if _managed.is_empty():
+		if multimesh != null:
+			out.append(self)
+		var edge := get_node_or_null(NodePath(EDGE_CHILD)) as MultiMeshInstance3D
+		if edge != null:
+			out.append(edge)
+		return out
+	for entry in _managed:
+		var surface: MultiMeshInstance3D = entry.get("surface")
+		var edge: MultiMeshInstance3D = entry.get("edge")
+		if is_instance_valid(surface):
+			out.append(surface)
+		if is_instance_valid(edge):
+			out.append(edge)
+	return out
+
+
+func _apply_params_all() -> void:
+	if ramp == null:
 		return
-	_shader_mat.set_shader_parameter("u_atlas", ramp.atlas)
-	_shader_mat.set_shader_parameter("u_char_count", ramp.char_count)
-	_shader_mat.set_shader_parameter("u_glyph_px", glyph_px)
-	_shader_mat.set_shader_parameter("u_tint", Vector3(tint.r, tint.g, tint.b))
-	_shader_mat.set_shader_parameter("u_emission_energy", emission_energy)
+	for entry in _managed:
+		var surface: MultiMeshInstance3D = entry.get("surface")
+		var edge: MultiMeshInstance3D = entry.get("edge")
+		var host_emissive: bool = entry.get("emissive", false)
+		if is_instance_valid(surface):
+			_apply_params_to(surface, false, host_emissive)
+		if is_instance_valid(edge):
+			_apply_params_to(edge, true, host_emissive)
+	if _managed.is_empty() and material_override is ShaderMaterial:
+		_apply_params_to(self, false, emissive_body)
+
+
+func _apply_params_to(mmi: MultiMeshInstance3D, is_edge: bool, host_emissive: bool) -> void:
+	var mat := mmi.material_override as ShaderMaterial
+	if mat == null:
+		_ensure_material(mmi, is_edge)
+		mat = mmi.material_override as ShaderMaterial
+	if mat == null or ramp == null:
+		return
+	_set_common_params(mat, is_edge)
+	var want_dither := effect_enabled and not host_emissive and not emissive_body
+	if want_dither:
+		var key := "edge" if is_edge else "surface"
+		if not _dither_cache.has(key):
+			var dither := ShaderMaterial.new()
+			dither.shader = preload("res://features/ascii/glyph_bayer_overlay.gdshader")
+			_dither_cache[key] = dither
+		var dither_mat: ShaderMaterial = _dither_cache[key]
+		_set_common_params(dither_mat, is_edge)
+		dither_mat.set_shader_parameter("u_dither_pixel_size", dither_pixel_size)
+		dither_mat.set_shader_parameter("u_dither_color_levels", dither_color_levels)
+		mmi.material_overlay = dither_mat
+	else:
+		mmi.material_overlay = null
+	mmi.visible = effect_enabled
+
+
+func _set_common_params(mat: ShaderMaterial, is_edge: bool) -> void:
+	mat.set_shader_parameter("u_atlas", ramp.atlas)
+	mat.set_shader_parameter("u_char_count", ramp.char_count)
+	mat.set_shader_parameter("u_edge_count", ramp.edge_count)
+	mat.set_shader_parameter("u_glyph_px", glyph_px)
+	mat.set_shader_parameter("u_emission_energy", emission_energy)
+	mat.set_shader_parameter("u_edge_mode", 1.0 if is_edge else 0.0)
+	mat.set_shader_parameter("u_light_dir", light_direction.normalized())
+	mat.set_shader_parameter("u_ambient", ambient)
+	mat.set_shader_parameter("u_mono", _mono)
 	var vp := get_viewport()
 	if vp:
-		var sz := vp.get_visible_rect().size
-		_shader_mat.set_shader_parameter("u_viewport_size", sz)
-
-	if _glyph_dither_wanted():
-		if _dither_mat == null:
-			_dither_mat = ShaderMaterial.new()
-			_dither_mat.shader = preload("res://features/ascii/glyph_bayer_overlay.gdshader")
-		for parameter in ["u_atlas", "u_char_count", "u_glyph_px", "u_depth_pull"]:
-			_dither_mat.set_shader_parameter(parameter, _shader_mat.get_shader_parameter(parameter))
-		_dither_mat.set_shader_parameter("u_dither_pixel_size", dither_pixel_size)
-		_dither_mat.set_shader_parameter("u_dither_color_levels", dither_color_levels)
-		material_overlay = _dither_mat
-	else:
-		material_overlay = null
+		mat.set_shader_parameter("u_viewport_size", vp.get_visible_rect().size)
 
 
-func _sync_host_surface(force: bool) -> void:
-	var host := get_parent() as MeshInstance3D
-	if host == null:
+func _resolve_albedo(host: MeshInstance3D) -> Color:
+	_capture_host(host)
+	var state: Dictionary = _host_state.get(host.get_instance_id(), {})
+	if state.has("albedo"):
+		return state["albedo"]
+	return _read_albedo_from_host(host)
+
+
+func _resolve_emissive(host: MeshInstance3D) -> bool:
+	if emissive_body:
+		return true
+	_capture_host(host)
+	var state: Dictionary = _host_state.get(host.get_instance_id(), {})
+	return state.get("emissive", false)
+
+
+func _host_source_material(host: MeshInstance3D) -> Material:
+	# material_override 由 GlyphField 写成 void shell，颜色只从表面覆盖 / 网格材质读。
+	var surface_override := host.get_surface_override_material(0)
+	if surface_override != null:
+		return surface_override
+	if host.mesh != null and host.mesh.get_surface_count() > 0:
+		var surface_mat := host.mesh.surface_get_material(0)
+		if surface_mat != null:
+			return surface_mat
+	if host.mesh is PrimitiveMesh:
+		var prim := host.mesh as PrimitiveMesh
+		if prim.material != null:
+			return prim.material
+	return null
+
+
+func _read_albedo_from_host(host: MeshInstance3D) -> Color:
+	var mat := _host_source_material(host)
+	if mat is BaseMaterial3D:
+		var base := mat as BaseMaterial3D
+		if base.emission_enabled:
+			return base.emission
+		return base.albedo_color
+	if mat is ShaderMaterial:
+		var sm := mat as ShaderMaterial
+		var c = sm.get_shader_parameter("albedo")
+		if c is Color:
+			return c
+	return Color(0.85, 0.9, 1.0)
+
+
+func _read_emissive_flag(host: MeshInstance3D) -> bool:
+	var mat := _host_source_material(host)
+	if mat is BaseMaterial3D:
+		return (mat as BaseMaterial3D).emission_enabled
+	return false
+
+
+func _capture_host(host: MeshInstance3D) -> void:
+	var id := host.get_instance_id()
+	if _host_state.has(id):
 		return
-	var signature := [
-		effect_enabled,
-		emissive_body,
-		tint,
-		shell_color,
-		core_energy,
-		emission_energy,
-		dither_pixel_size,
-		dither_color_levels,
-	]
-	if not force and signature == _host_signature:
+	_host_state[id] = {
+		"override": host.material_override,
+		"overlay": host.material_overlay,
+		"albedo": _read_albedo_from_host(host),
+		"emissive": _read_emissive_flag(host),
+		"emission_color": _read_albedo_from_host(host),
+	}
+
+
+func _sync_all_hosts(force: bool) -> void:
+	for host in _iter_hosts():
+		_sync_host_surface(host, force)
+
+
+func _sync_host_surface(host: MeshInstance3D, force: bool) -> void:
+	_capture_host(host)
+	var id := host.get_instance_id()
+	var state: Dictionary = _host_state[id]
+	var host_emissive: bool = emissive_body or state.get("emissive", false)
+	var albedo: Color = state.get("albedo", Color.WHITE)
+	var signature := [effect_enabled, host_emissive, shell_color, core_energy, emission_energy, albedo]
+	if not force and state.get("signature") == signature:
 		return
-	_host_signature = signature
-	_capture_host_if_needed(host)
+	state["signature"] = signature
 	if not effect_enabled:
 		visible = false
-		_restore_host_surface()
+		_restore_host(host)
 		return
 	visible = true
 	var material := StandardMaterial3D.new()
 	material.roughness = 1.0
-	if emissive_body:
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.albedo_color = _emissive_core_color(tint)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if host_emissive:
+		material.albedo_color = Color(
+			albedo.r * core_energy,
+			albedo.g * core_energy,
+			albedo.b * core_energy,
+			1.0
+		)
 		material.emission_enabled = true
-		material.emission = tint
+		material.emission = albedo
 		material.emission_energy_multiplier = core_energy
 		host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	else:
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		material.albedo_color = shell_color
 		host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	host.material_override = material
 	host.material_overlay = null
 
 
-func _emissive_core_color(color: Color) -> Color:
-	return Color(color.r * core_energy, color.g * core_energy, color.b * core_energy, 1.0)
+func _restore_all_hosts() -> void:
+	for id in _host_state.keys():
+		var host := instance_from_id(id) as MeshInstance3D
+		if host != null and is_instance_valid(host):
+			_restore_host(host)
+	_host_state.clear()
 
 
-func _capture_host_if_needed(host: MeshInstance3D) -> void:
-	if _host_captured:
+func _restore_host(host: MeshInstance3D) -> void:
+	var id := host.get_instance_id()
+	if not _host_state.has(id):
 		return
-	_saved_host_override = host.material_override
-	_saved_host_overlay = host.material_overlay
-	_host_captured = true
-
-
-func _restore_host_surface() -> void:
-	if not _host_captured:
-		return
-	var host := get_parent() as MeshInstance3D
-	if host == null:
-		return
-	host.material_override = _saved_host_override
-	host.material_overlay = _saved_host_overlay
-	_host_signature = []
+	var state: Dictionary = _host_state[id]
+	host.material_override = state.get("override")
+	host.material_overlay = state.get("overlay")
 
 
 func set_glyph_px(px: float) -> void:
 	glyph_px = px
-	if _shader_mat:
-		_shader_mat.set_shader_parameter("u_glyph_px", glyph_px)
-	if _dither_mat:
-		_dither_mat.set_shader_parameter("u_glyph_px", glyph_px)
+	_apply_params_all()
 
 
 func set_mono(on: bool) -> void:
-	if _shader_mat:
-		_shader_mat.set_shader_parameter("u_mono", 1.0 if on else 0.0)
+	_mono = 1.0 if on else 0.0
+	_apply_params_all()
 
 
 func sync_viewport_size() -> void:
-	if _shader_mat == null:
-		return
-	var vp := get_viewport()
-	if vp:
-		_shader_mat.set_shader_parameter("u_viewport_size", vp.get_visible_rect().size)
+	_apply_params_all()

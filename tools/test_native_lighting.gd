@@ -13,10 +13,11 @@ func _run() -> void:
 	var field := GlyphField.new()
 	field.spacing = 0.5
 	field.glyph_px = 8.0
-	field.tint = Color(0.9, 0.9, 0.9)
 	host.add_child(field)
-	await process_frame
-	await process_frame
+	var deadline := Time.get_ticks_msec() + 10000
+	while field._preview_dirty or field._preview_thread != null:
+		assert(Time.get_ticks_msec() < deadline, "Glyph preview timed out")
+		await process_frame
 
 	assert(field.visible)
 	assert(host.material_override is StandardMaterial3D)

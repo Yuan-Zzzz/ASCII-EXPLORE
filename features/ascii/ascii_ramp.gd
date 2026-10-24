@@ -9,8 +9,11 @@ extends Resource
 ##
 ## 改字符：只改 ramp 字符串，然后运行 tools/generate_ramp_atlas.py（写出 features/ascii/atlas.png）
 
-## 从暗到亮。空格表示最暗（几乎看不见）
-@export var ramp: String = " .:-=+*#%@"
+## 图集字符串：前 edge_count 格为棱边方向字符（-/|\），其后从暗到亮。空格表示最暗。
+@export var ramp: String = "-/|\\ .:-=+*#%@"
+
+## 棱边字符数量（固定占 ramp 前缀）
+@export var edge_count: int = 4
 
 ## 图集：一行，每格一个字符（由生成脚本写出）
 @export var atlas: Texture2D
@@ -24,11 +27,26 @@ var char_count: int:
 		return ramp.length()
 
 
-## brightness ∈ [0, 1] → 阶梯下标
+var surface_count: int:
+	get:
+		return maxi(char_count - edge_count, 1)
+
+
+## brightness ∈ [0, 1] → 表面阶梯下标（跳过棱边前缀）
 func index_at(brightness: float) -> int:
-	if char_count <= 0:
-		return 0
-	return clampi(int(brightness * char_count), 0, char_count - 1)
+	if surface_count <= 0:
+		return edge_count
+	var local := clampi(int(brightness * surface_count), 0, surface_count - 1)
+	# 避免落在空格格
+	var idx := edge_count + local
+	if idx < char_count and ramp.substr(idx, 1) == " ":
+		idx = mini(idx + 1, char_count - 1)
+	return idx
+
+
+## 屏幕方向档 0..3 → 棱边字符下标（0:-  1:/  2:|  3:\）
+func edge_index(dir_bin: int) -> int:
+	return clampi(dir_bin, 0, maxi(edge_count - 1, 0))
 
 
 ## 下标 → 字符（调试用）
