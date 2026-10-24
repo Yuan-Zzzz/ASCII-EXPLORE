@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://u2vx4s438vsy"]
+
+[ext_resource type="Shader" uid="uid://cck1ku3sjs7id" path="res://features/ascii/glyph_particle.gdshader" id="1_gnaon"]
+[ext_resource type="Texture2D" uid="uid://8mhsgvqloewl" path="res://features/ascii/atlas.png" id="2_uoqqb"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_gnaon")
+shader_parameter/u_atlas = ExtResource("2_uoqqb")
+shader_parameter/u_char_count = 14
+shader_parameter/u_edge_count = 4
+shader_parameter/u_glyph_px = 20.0
+shader_parameter/u_depth_pull = 0.02
+shader_parameter/u_emission_energy = 2.8

@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cbl25hk8h4hy8"]
+
+[ext_resource type="Shader" uid="uid://cck1ku3sjs7id" path="res://features/ascii/glyph_particle.gdshader" id="1_qpus6"]
+[ext_resource type="Texture2D" uid="uid://8mhsgvqloewl" path="res://features/ascii/atlas.png" id="2_0f075"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_qpus6")
+shader_parameter/u_atlas = ExtResource("2_0f075")
+shader_parameter/u_char_count = 14
+shader_parameter/u_edge_count = 4
+shader_parameter/u_glyph_px = 16.0
+shader_parameter/u_depth_pull = 0.02
+shader_parameter/u_emission_energy = 0.35
