@@ -15,7 +15,6 @@ enum ViewMode { GLYPHS, RAW, POST }
 @onready var hint: Label = $AsciiLayer/Hint
 @onready var camera: Camera3D = $Camera3D
 @onready var pivot: Node3D = $Pivot
-@onready var sun: DirectionalLight3D = $Sun
 @onready var ground: MeshInstance3D = $Pivot/Ground
 @onready var earth: MeshInstance3D = $Pivot/Earth
 @onready var sun_ball: MeshInstance3D = $Pivot/SunBall
@@ -54,7 +53,6 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if pivot and Input.is_key_pressed(KEY_SPACE):
 		pivot.rotate_y(delta * 0.35)
-	_sync_light_to_glyphs()
 	_on_viewport_resized()
 
 
@@ -105,7 +103,6 @@ func _apply_view_mode() -> void:
 			continue
 		f.effect_enabled = glyphs_on
 		if glyphs_on:
-			f.surface_render_mode = 0
 			f.shell_color = Color(0.02, 0.03, 0.06)
 
 
@@ -131,14 +128,6 @@ func _set_glyph_px(px: float) -> void:
 	for f in _glyph_fields:
 		if is_instance_valid(f):
 			f.set_glyph_px(glyph_px)
-
-
-func _sync_light_to_glyphs() -> void:
-	# DirectionalLight 光线沿本地 -Z 射出；Lambert 要用「指向光源」的方向 = +Z
-	var dir: Vector3 = sun.global_transform.basis.z
-	for f in _glyph_fields:
-		if is_instance_valid(f):
-			f.set_light_dir(dir)
 
 
 func _on_viewport_resized() -> void:

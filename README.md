@@ -7,10 +7,9 @@ Godot 4.7 project. Surfaces render as ASCII glyphs. Main play scene is a walkabl
 | Path | Role |
 |------|------|
 | `scenes/` | Composition roots only (`moon_walk.tscn`, demos) |
-| `features/ascii/` | Glyph sampling, MultiMesh fields, ramp atlas |
+| `features/ascii/` | Glyph sampling, MultiMesh fields, ramp atlas, glyph Bayer overlay |
 | `features/black_hole/` | Disk optics, lens shader, disk light |
 | `features/moon_walk/` | Player, terrain, orbits, sun corona, HUD controls |
-| `features/dither/` | Bayer model overlay |
 | `tools/` | Headless smoke, benches, bake scripts (not shipped) |
 | `addons/` | Editor plugins |
 

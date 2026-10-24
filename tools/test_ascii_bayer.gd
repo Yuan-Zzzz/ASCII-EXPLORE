@@ -12,7 +12,6 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
-	assert(main.surface_render_mode == 2)
 	assert(not main.has_node("BayerDither"))
 	for path in ["Moon/MoonMesh", "SkyPivot/Earth", "SkyPivot/SunHost"]:
 		var host = main.get_node(path)
@@ -31,18 +30,5 @@ func _run() -> void:
 	var field = main.get_node("Moon/MoonMesh/GlyphField")
 	assert(field.material_overlay.get_shader_parameter("u_dither_pixel_size") == 3.0)
 	assert(field.material_overlay.get_shader_parameter("u_dither_color_levels") == 5.0)
-	main.surface_render_mode = 0
-	await process_frame
-	await process_frame
-	assert(field.visible and field.material_overlay == null)
-	main.surface_render_mode = 1
-	await process_frame
-	await process_frame
-	assert(not field.visible)
-	assert(main.get_node("Moon/MoonMesh").material_overlay is ShaderMaterial)
-	main.surface_render_mode = 2
-	await process_frame
-	await process_frame
-	assert(field.visible and field.material_overlay is ShaderMaterial)
-	print("ASCII_BAYER_OK combined geometry, independent UI, parameter updates and three mode transitions")
+	print("ASCII_BAYER_OK combined geometry, glyph Bayer overlay, and dither parameter broadcast")
 	quit()

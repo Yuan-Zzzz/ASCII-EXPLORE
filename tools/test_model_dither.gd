@@ -6,32 +6,28 @@ func _initialize() -> void:
 func _run() -> void:
 	var scene := load("res://scenes/moon_walk.tscn") as PackedScene
 	var main := scene.instantiate()
-	main.surface_render_mode = 1
 	root.add_child(main)
 	await process_frame
 	await process_frame
 	assert(not main.has_node("BayerDither"), "Full-screen effect must be removed")
 	for path in ["Moon/MoonMesh", "SkyPivot/Earth", "SkyPivot/SunHost"]:
 		var host := main.get_node(path) as MeshInstance3D
-		assert(host.material_override is StandardMaterial3D, "Model needs native lit material")
-		assert(not host.get_node("GlyphField").visible, "Glyphs must not obscure the model")
-		assert(host.material_overlay.shader.resource_path.ends_with("bayer_model.gdshader"))
+		assert(host.material_override is StandardMaterial3D, "Host needs depth shell material")
+		assert(host.material_overlay == null, "Bayer Model host overlay must be gone")
+		var field := host.get_node("GlyphField") as GlyphField
+		assert(field.visible, "ASCII glyphs must stay visible")
+		if field.emissive_body:
+			assert(field.material_overlay == null, "Emissive bodies skip glyph Bayer")
+		else:
+			assert(field.material_overlay is ShaderMaterial)
+			assert(field.material_overlay.shader.resource_path.ends_with("glyph_bayer_overlay.gdshader"))
 	main.dither_pixel_size = 3.0
-	main.surface_render_mode = 0
 	await process_frame
 	await process_frame
-	for path in ["Moon/MoonMesh", "SkyPivot/Earth", "SkyPivot/SunHost"]:
-		var host := main.get_node(path) as MeshInstance3D
-		assert(host.get_node("GlyphField").visible, "ASCII mode must restore glyphs")
-		assert(host.material_override is StandardMaterial3D)
-	main.surface_render_mode = 1
-	await process_frame
-	await process_frame
-	var material := main.get_node("Moon/MoonMesh").material_overlay as ShaderMaterial
+	var material := main.get_node("Moon/MoonMesh/GlyphField").material_overlay as ShaderMaterial
 	assert(material != null)
-	assert(is_equal_approx(material.get_shader_parameter("u_pixel_size"), 3.0))
+	assert(is_equal_approx(material.get_shader_parameter("u_dither_pixel_size"), 3.0))
 	var sun_light := main.get_node("SkyPivot/SunHost/SunLight") as DirectionalLight3D
 	assert(sun_light.shadow_enabled, "Native shadows must be enabled")
-	print("MODEL_DITHER_OK: model materials, glyph visibility, mode switching, parameters and lighting")
+	print("MODEL_DITHER_OK: default ASCII+Bayer, no host bayer_model, dither params and lighting")
 	quit()
-

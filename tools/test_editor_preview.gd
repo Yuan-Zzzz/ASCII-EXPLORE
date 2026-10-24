@@ -32,13 +32,12 @@ func _run() -> void:
 	assert(float(lens_material.get_shader_parameter("u_lens_radius")) > 0.0, "Editor lens needs a viewport-sized radius")
 	assert(float(lens_material.get_shader_parameter("u_ascii")) == 1.0, "Editor lens must show ASCII by default")
 	assert(float(lens_material.get_shader_parameter("u_dither")) == 1.0, "Editor lens must show dither by default")
-	var moon_walk_mode := int(scene.get("surface_render_mode"))
 	var moon_walk_dither_px := float(scene.get("dither_pixel_size"))
 	black_hole.surface_render_mode = 0
 	await process_frame
-	assert(int(scene.get("surface_render_mode")) == moon_walk_mode, "BlackHole surface mode must not change MoonWalk")
 	assert(float(lens_material.get_shader_parameter("u_ascii")) == 1.0, "ASCII-only mode keeps ascii on")
 	assert(float(lens_material.get_shader_parameter("u_dither")) == 0.0, "ASCII-only mode turns dither off")
+	assert(is_equal_approx(float(scene.get("dither_pixel_size")), moon_walk_dither_px), "BlackHole dither must not change MoonWalk")
 	black_hole.surface_render_mode = 2
 	black_hole.dither_pixel_size = 3.0
 	black_hole.dither_color_levels = 8.0
@@ -87,11 +86,6 @@ func _run() -> void:
 	var mat := field.material_override as ShaderMaterial
 	assert(is_equal_approx(mat.get_shader_parameter("u_glyph_px"), 9.0))
 	assert(mat.get_shader_parameter("u_tint") == Vector3(0.8, 0.6, 0.4))
-	var sun := scene.get_node("SkyPivot/SunHost/SunLight") as DirectionalLight3D
-	sun.rotate_y(0.5)
-	await process_frame
-	await process_frame
-	assert(field.light_dir.normalized().dot(sun.global_basis.z.normalized()) > 0.999)
 	assert(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED, "Editor must keep mouse free")
 	print("EDITOR_PREVIEW_OK moon=%d earth=%d" % [field.multimesh.instance_count, earth.multimesh.instance_count])
 	scene.free()

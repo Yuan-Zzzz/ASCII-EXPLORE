@@ -2,12 +2,11 @@
 class_name GlyphField
 extends MultiMeshInstance3D
 ## 在 MeshInstance3D 表面生成字符点 MultiMesh（Three.js GlyphField 思路）。
-## 挂到宿主下即可：采样、depth shell、Bayer 表面模式由本节点统一处理。
+## 挂到宿主下即应用 ASCII + Bayer：采样、depth shell、字形 Bayer 由本节点统一处理。
 
 signal rebuilt
 
 const SurfaceSamplerScript = preload("res://features/ascii/surface_sampler.gd")
-const ModelDitherShader = preload("res://features/dither/bayer_model.gdshader")
 const LENS_LAYER := 10
 const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
 
@@ -16,24 +15,15 @@ const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
 @export var seed: int = 1
 @export var glyph_px: float = 12.0
 @export var tint: Color = Color(0.85, 0.9, 1.0)
-@export var light_dir: Vector3 = Vector3(0.4, 0.8, 0.3)
-@export var ambient: float = 0.35 # Legacy scene compatibility; use WorldEnvironment.
 @export var emission_energy: float = 0.0
-@export var dither_enabled: bool = false
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
 ## Host is a light source. Depth shell becomes HDR emissive core; glyph Bayer overlay stays off.
 @export var emissive_body: bool = false
-## Bayer model overlay multiplies the undithered lit frame by this weight (1 on the primary lit body).
-@export_range(0.0, 1.0, 0.05) var dither_lit_weight: float = 0.0
 ## Drop the host mesh from the black-hole lens cull mask so the lens samples sky without this body.
 @export var hide_from_lens: bool = false
-## ASCII 3D / Bayer Model / ASCII + Bayer — drives host depth shell and glyph visibility.
-@export_enum("ASCII 3D", "Bayer Model", "ASCII + Bayer") var surface_render_mode: int = 0
 ## When false, restore the host's original materials and hide glyphs (raw / post demos).
 @export var effect_enabled: bool = true
-## Apply / restore parent MeshInstance3D materials for the chosen surface mode.
-@export var manage_host_surface: bool = true
 ## Emissive host core multiplier (HDR albedo / emission energy).
 @export_range(0.0, 12.0, 0.1) var core_energy: float = 4.0
 @export var shell_color: Color = VOID_SHELL_COLOR
@@ -44,7 +34,6 @@ const VOID_SHELL_COLOR := Color(0, 0, 0, 1)
 
 var _dither_mat: ShaderMaterial
 var _shader_mat: ShaderMaterial
-var _model_dither_mat: ShaderMaterial
 var _preview_mesh: Mesh
 var _preview_signature: Array = []
 var _preview_wait: float = 0.0
@@ -214,6 +203,10 @@ func _ensure_material() -> void:
 	material_override = _shader_mat
 
 
+func _glyph_dither_wanted() -> bool:
+	return effect_enabled and not emissive_body
+
+
 func _apply_params() -> void:
 	if _shader_mat == null or ramp == null:
 		return
@@ -227,7 +220,7 @@ func _apply_params() -> void:
 		var sz := vp.get_visible_rect().size
 		_shader_mat.set_shader_parameter("u_viewport_size", sz)
 
-	if dither_enabled:
+	if _glyph_dither_wanted():
 		if _dither_mat == null:
 			_dither_mat = ShaderMaterial.new()
 			_dither_mat.shader = preload("res://features/ascii/glyph_bayer_overlay.gdshader")
@@ -241,17 +234,11 @@ func _apply_params() -> void:
 
 
 func _sync_host_surface(force: bool) -> void:
-	if not manage_host_surface:
-		return
 	var host := get_parent() as MeshInstance3D
 	if host == null:
 		return
-	var want_dither := effect_enabled and surface_render_mode == 2 and not emissive_body
-	if dither_enabled != want_dither:
-		dither_enabled = want_dither
 	var signature := [
 		effect_enabled,
-		surface_render_mode,
 		emissive_body,
 		tint,
 		shell_color,
@@ -259,10 +246,8 @@ func _sync_host_surface(force: bool) -> void:
 		emission_energy,
 		dither_pixel_size,
 		dither_color_levels,
-		dither_lit_weight,
 	]
 	if not force and signature == _host_signature:
-		_update_model_dither_params(host)
 		return
 	_host_signature = signature
 	_capture_host_if_needed(host)
@@ -270,7 +255,7 @@ func _sync_host_surface(force: bool) -> void:
 		visible = false
 		_restore_host_surface()
 		return
-	visible = surface_render_mode != 1
+	visible = true
 	var material := StandardMaterial3D.new()
 	material.roughness = 1.0
 	if emissive_body:
@@ -281,38 +266,11 @@ func _sync_host_surface(force: bool) -> void:
 		material.emission_energy_multiplier = core_energy
 		host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	else:
-		if surface_render_mode != 1:
-			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.albedo_color = tint if surface_render_mode == 1 else shell_color
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = shell_color
 		host.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	host.material_override = material
 	host.material_overlay = null
-	if surface_render_mode == 1:
-		if _model_dither_mat == null:
-			_model_dither_mat = ShaderMaterial.new()
-			_model_dither_mat.shader = ModelDitherShader
-		host.material_overlay = _model_dither_mat
-		_update_model_dither_params(host)
-
-
-func _update_model_dither_params(host: MeshInstance3D) -> void:
-	if surface_render_mode != 1 or not effect_enabled:
-		return
-	var overlay := host.material_overlay as ShaderMaterial
-	if overlay == null:
-		return
-	overlay.set_shader_parameter("u_pixel_size", dither_pixel_size)
-	overlay.set_shader_parameter("u_color_levels", dither_color_levels)
-	overlay.set_shader_parameter("lit_weight", dither_lit_weight)
-	var material := host.material_override as StandardMaterial3D
-	if material == null:
-		return
-	if emissive_body:
-		material.albedo_color = _emissive_core_color(tint)
-		material.emission = tint
-		material.emission_energy_multiplier = core_energy
-	else:
-		material.albedo_color = tint
 
 
 func _emissive_core_color(color: Color) -> Color:
@@ -328,7 +286,7 @@ func _capture_host_if_needed(host: MeshInstance3D) -> void:
 
 
 func _restore_host_surface() -> void:
-	if not manage_host_surface or not _host_captured:
+	if not _host_captured:
 		return
 	var host := get_parent() as MeshInstance3D
 	if host == null:
@@ -349,18 +307,6 @@ func set_glyph_px(px: float) -> void:
 func set_mono(on: bool) -> void:
 	if _shader_mat:
 		_shader_mat.set_shader_parameter("u_mono", 1.0 if on else 0.0)
-
-
-func set_light_dir(dir: Vector3) -> void:
-	light_dir = dir
-	if _shader_mat:
-		_shader_mat.set_shader_parameter("u_emission_energy", emission_energy)
-
-
-func set_ambient(amount: float) -> void:
-	ambient = amount
-	if _shader_mat:
-		_shader_mat.set_shader_parameter("u_emission_energy", emission_energy)
 
 
 func sync_viewport_size() -> void:

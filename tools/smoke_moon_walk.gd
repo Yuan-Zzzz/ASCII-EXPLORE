@@ -105,13 +105,6 @@ func _run() -> void:
 		_fail("earth instances %s" % earth_n)
 		return
 
-	var light := main.get_node("SkyPivot/SunHost/SunLight") as DirectionalLight3D
-	var light_z := light.global_transform.basis.z.normalized()
-	var moon_light: Vector3 = moon_field.light_dir.normalized()
-	if moon_light.dot(light_z) < 0.999:
-		_fail("glyph light_dir not synced")
-		return
-
 	# 将角色放到主坑内，确保不会站在原来的隐形球面上；月球仍在轨道上移动。
 	player.global_position = moon.global_position + center * (moon_radius + 2.0)
 	player.velocity = Vector3.ZERO

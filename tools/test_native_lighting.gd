@@ -18,28 +18,12 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 
-	field.surface_render_mode = 0
-	await process_frame
-	await process_frame
 	assert(field.visible)
 	assert(host.material_override is StandardMaterial3D)
 	assert((host.material_override as StandardMaterial3D).shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED)
 	assert(host.material_overlay == null)
-	assert(field.material_overlay == null)
-
-	field.surface_render_mode = 1
-	await process_frame
-	await process_frame
-	assert(not field.visible)
-	assert(host.material_overlay is ShaderMaterial)
-	assert((host.material_overlay as ShaderMaterial).shader.resource_path.ends_with("bayer_model.gdshader"))
-
-	field.surface_render_mode = 2
-	await process_frame
-	await process_frame
-	assert(field.visible)
 	assert(field.material_overlay is ShaderMaterial)
-	assert(host.material_overlay == null)
+	assert((field.material_overlay as ShaderMaterial).shader.resource_path.ends_with("glyph_bayer_overlay.gdshader"))
 
 	field.effect_enabled = false
 	await process_frame
@@ -47,5 +31,5 @@ func _run() -> void:
 	assert(not field.visible)
 	assert(host.material_override == original)
 
-	print("NATIVE_LIGHTING_OK: GlyphField surface modes manage host materials and restore originals")
+	print("NATIVE_LIGHTING_OK: GlyphField applies ASCII+Bayer and restores host materials when disabled")
 	quit()

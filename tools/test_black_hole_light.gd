@@ -55,7 +55,6 @@ func _run() -> void:
 
 	# 4. 从月面看黑洞的透镜只在镜头看得到黑洞时出现。
 	main.get_node("Orbits").running = false
-	main.surface_render_mode = 1
 	await process_frame
 	var cam = main.get_node("Player/Camera3D") as Camera3D
 	cam.look_at(bh.global_position, Vector3.UP)
@@ -72,14 +71,14 @@ func _run() -> void:
 	if lens.visible:
 		return _fail("moon lens visible while looking away")
 
-	# 5. 月面字母的 Bayer 覆盖层使用“未抖动的光照画面”，黑洞的光能进抖动模式。
-	var overlay: ShaderMaterial = main.get_node("Moon/MoonMesh").material_overlay
-	if overlay == null or float(overlay.get_shader_parameter("lit_weight")) != 1.0:
-		return _fail("moon bayer overlay ignores lighting")
-	var earth_overlay: ShaderMaterial = main.get_node("SkyPivot/Earth").material_overlay
-	if earth_overlay != null and float(earth_overlay.get_shader_parameter("lit_weight")) != 0.0:
-		return _fail("only the moon bayer overlay should use the lit weight")
-	main.surface_render_mode = 2
+	# 5. 月面固定 ASCII+Bayer：字形 Bayer 覆盖层存在，宿主无 bayer_model overlay。
+	var moon_host := main.get_node("Moon/MoonMesh") as MeshInstance3D
+	if moon_host.material_overlay != null:
+		return _fail("moon host must not use bayer_model overlay")
+	var moon_field := moon_host.get_node("GlyphField") as GlyphField
+	var overlay := moon_field.material_overlay as ShaderMaterial
+	if overlay == null or not overlay.shader.resource_path.ends_with("glyph_bayer_overlay.gdshader"):
+		return _fail("moon glyph Bayer overlay missing")
 	print("%s_OK spot=%.2fdeg" % [TAG, near_angle])
 	quit(0)
 

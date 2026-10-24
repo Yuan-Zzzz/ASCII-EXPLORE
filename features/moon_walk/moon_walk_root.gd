@@ -1,7 +1,6 @@
 @tool
 extends Node3D
 
-@export_enum("ASCII 3D", "Bayer Model", "ASCII + Bayer") var surface_render_mode: int = 2
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
 @export_range(0.0, 12.0, 0.1) var sun_core_energy: float = 4.0
@@ -58,17 +57,11 @@ func _collect_fields_under(node: Node) -> void:
 
 
 func _broadcast_to_glyphs() -> void:
-	var light_dir := Vector3(0.4, 0.8, 0.3)
-	if _sun_light != null:
-		light_dir = _sun_light.global_basis.z.normalized()
 	for field in _glyph_fields:
 		field.core_energy = sun_core_energy
 		if field.emissive_body:
 			field.emission_energy = sun_glyph_emission
 		field.dither_pixel_size = dither_pixel_size
 		field.dither_color_levels = dither_color_levels
-		field.surface_render_mode = surface_render_mode
 		field.effect_enabled = true
-		if not field.light_dir.is_equal_approx(light_dir):
-			field.light_dir = light_dir
 		field.sync_viewport_size()
