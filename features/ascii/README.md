@@ -55,6 +55,7 @@ index = edge_count + clamp(int(lum * surface_count), 0, surface_count - 1)
 挂上即应用 **ASCII + Bayer**（编辑器与运行时同一套，`@tool`）。
 
 - `spacing` / `edge_step` / `edge_threshold` / `seed`：表面与棱边采样；改动后编辑器防抖重建。
+- `animate_seed` / `seed_interval`：开启后每隔 `seed_interval` 秒将 seed +1，点位与字符抖动持续变化。
 - `sample_surface` / `sample_edges`：开关两类采样。
 - `glyph_px`、`ramp`、`dither_pixel_size` / `dither_color_levels`：字符与 Bayer 外观。
 - `light_direction` / `ambient`：表面选字用的简化光照。

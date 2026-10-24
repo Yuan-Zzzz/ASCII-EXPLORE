@@ -3,7 +3,7 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cayo73sgmoenq"
+uid="uid://clkf00nau0v0l"
 path="res://.godot/imported/lowpoly_old_tv.blend-127f9143114ffe8c78157be3dcf06e93.scn"
 
 [deps]
@@ -42,8 +42,8 @@ materials/extract_path=""
 _subresources={}
 blender/nodes/visible=0
 blender/nodes/active_collection_only=false
-blender/nodes/punctual_lights=false
-blender/nodes/cameras=false
+blender/nodes/punctual_lights=true
+blender/nodes/cameras=true
 blender/nodes/custom_properties=true
 blender/nodes/modifiers=1
 blender/meshes/vertex_colors=1

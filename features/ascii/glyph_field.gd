@@ -20,6 +20,10 @@ const MANAGED_META := &"_glyph_field_owner"
 @export var sample_surface: bool = true
 @export var sample_edges: bool = true
 @export var seed: int = 1
+## 开启后 seed 随时间递增，驱动采样与字符抖动持续变化。
+@export var animate_seed: bool = false
+## 每隔多少秒将 seed +1（越小变化越快）。
+@export_range(0.05, 10.0, 0.05, "or_greater", "suffix:s") var seed_interval: float = 0.5
 @export var glyph_px: float = 12.0
 @export var emission_energy: float = 0.0
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
@@ -55,6 +59,7 @@ var _host_state: Dictionary = {}
 var _managed: Array[Dictionary] = []
 var _mono: float = 0.0
 var _dither_cache: Dictionary = {}  # key "edge"|"surface" -> ShaderMaterial
+var _seed_accum: float = 0.0
 
 
 func _validate_property(property: Dictionary) -> void:
@@ -76,6 +81,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_animate_seed(delta)
 	var signature := _input_signature()
 	if signature != _preview_signature:
 		_preview_signature = signature
@@ -88,6 +94,19 @@ func _process(delta: float) -> void:
 			_start_preview()
 	_sync_all_hosts(false)
 	_apply_params_all()
+
+
+func _tick_animate_seed(delta: float) -> void:
+	if not animate_seed or not effect_enabled:
+		_seed_accum = 0.0
+		return
+	var interval := maxf(seed_interval, 0.05)
+	_seed_accum += delta
+	if _seed_accum < interval:
+		return
+	var steps := int(_seed_accum / interval)
+	_seed_accum -= float(steps) * interval
+	seed = seed + steps
 
 
 func _queue_preview() -> void:
