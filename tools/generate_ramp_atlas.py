@@ -2,7 +2,7 @@
 """从 AsciiRamp 的阶梯字符串生成单行 atlas.png。
 
 默认阶梯与 features/ascii/ascii_ramp.tres 一致：
-  " .:-=+*#%@"   （左暗右亮）
+  " .:-=+*#%@"   （左暗右亮；棱边也走同一阶梯）
 
 用法：
   python3 tools/generate_ramp_atlas.py
@@ -17,9 +17,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 
-# 前 4 格为棱边方向字符（与 threejs EDGE_CHARS 对齐），其后为暗→亮阶梯
-DEFAULT_RAMP = "-/|\\ .:-=+*#%@"
-EDGE_CHARS = "-/|\\"
+DEFAULT_RAMP = " .:-=+*#%@"
 
 
 def find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

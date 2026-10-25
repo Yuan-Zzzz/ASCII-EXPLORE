@@ -9,11 +9,12 @@ extends Resource
 ##
 ## 改字符：只改 ramp 字符串，然后运行 tools/generate_ramp_atlas.py（写出 features/ascii/atlas.png）
 
-## 图集字符串：前 edge_count 格为棱边方向字符（-/|\），其后从暗到亮。空格表示最暗。
-@export var ramp: String = "-/|\\ .:-=+*#%@"
+## 图集字符串：整行暗→亮（Bourke 风格）。空格表示最暗。
+## 历史：曾用前 edge_count 格存 -/|\ 方向字；现默认 0，棱边也走亮度阶梯。
+@export var ramp: String = " .:-=+*#%@"
 
-## 棱边字符数量（固定占 ramp 前缀）
-@export var edge_count: int = 4
+## 兼容旧资源：>0 时表面选字仍跳过此前缀。新资源应为 0。
+@export var edge_count: int = 0
 
 ## 图集：一行，每格一个字符（由生成脚本写出）
 @export var atlas: Texture2D
@@ -29,23 +30,32 @@ var char_count: int:
 
 var surface_count: int:
 	get:
-		return maxi(char_count - edge_count, 1)
+		return maxi(char_count - maxi(edge_count, 0), 1)
 
 
-## brightness ∈ [0, 1] → 表面阶梯下标（跳过棱边前缀）
+## brightness ∈ [0, 1] → 表面阶梯下标（若 edge_count>0 则跳过前缀）
 func index_at(brightness: float) -> int:
 	if surface_count <= 0:
-		return edge_count
+		return maxi(edge_count, 0)
 	var local := clampi(int(brightness * surface_count), 0, surface_count - 1)
-	# 避免落在空格格
-	var idx := edge_count + local
+	var idx := maxi(edge_count, 0) + local
 	if idx < char_count and ramp.substr(idx, 1) == " ":
 		idx = mini(idx + 1, char_count - 1)
 	return idx
 
 
-## 屏幕方向档 0..3 → 棱边字符下标（0:-  1:/  2:|  3:\）
+## 棱边选字：与表面同阶梯，先 mix 向亮端再 index_at。
+## edge_bright ∈ [0, 1]：0=与表面相同，1=强制最亮。
+func edge_index_at(brightness: float, edge_bright: float) -> int:
+	var t := clampf(edge_bright, 0.0, 1.0)
+	var lum := lerpf(clampf(brightness, 0.0, 1.0), 1.0, t)
+	return index_at(lum)
+
+
+## 兼容旧 API：方向档映射。edge_count==0 时退化为 clamp 到 ramp。
 func edge_index(dir_bin: int) -> int:
+	if edge_count <= 0:
+		return clampi(dir_bin, 0, maxi(char_count - 1, 0))
 	return clampi(dir_bin, 0, maxi(edge_count - 1, 0))
 
 
@@ -58,7 +68,7 @@ func char_at(index: int) -> String:
 
 ## 下标 → atlas UV 矩形（Godot：原点在左上，V 向下）
 ## 图集布局：单行，宽 = cell_size * char_count，高 = cell_size
-func uv_rect(index: int) -> Rect2: 
+func uv_rect(index: int) -> Rect2:
 	var i := clampi(index, 0, maxi(char_count - 1, 0))
 	var du := 1.0 / float(maxi(char_count, 1))
 	return Rect2(float(i) * du, 0.0, du, 1.0)

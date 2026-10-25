@@ -5,6 +5,4 @@
 
 [resource]
 script = ExtResource("1_ramp")
-ramp = "-/|\\ .:-=+*#%@"
-edge_count = 4
 atlas = ExtResource("2_atlas")

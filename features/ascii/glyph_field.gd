@@ -36,6 +36,8 @@ const MANAGED_META := &"_glyph_field_owner"
 ## 棱边默认不抽稀（shader 内轮廓点始终保留）；保留导出以便特殊场景手动削弱。
 @export_range(0.01, 1.0, 0.01) var edge_keep_near: float = 1.0
 @export_range(0.01, 1.0, 0.01) var edge_keep_far: float = 1.0
+## 棱边选字向亮端混合（0=与表面相同，1=强制最亮）；用于轮廓醒目且无方向字跳变。
+@export_range(0.0, 1.0, 0.01) var edge_bright: float = 0.35
 @export var emission_energy: float = 0.0
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
@@ -563,6 +565,7 @@ func _set_common_params(mat: ShaderMaterial, is_edge: bool) -> void:
 	mat.set_shader_parameter("u_glyph_px", glyph_px)
 	mat.set_shader_parameter("u_emission_energy", emission_energy)
 	mat.set_shader_parameter("u_edge_mode", 1.0 if is_edge else 0.0)
+	mat.set_shader_parameter("u_edge_bright", clampf(edge_bright, 0.0, 1.0))
 	mat.set_shader_parameter("u_light_dir", light_direction.normalized())
 	mat.set_shader_parameter("u_ambient", ambient)
 	mat.set_shader_parameter("u_mono", _mono)

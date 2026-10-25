@@ -7,7 +7,7 @@
 render_priority = 0
 shader = ExtResource("1_cwhib")
 shader_parameter/u_atlas = ExtResource("2_n8hlh")
-shader_parameter/u_char_count = 14
+shader_parameter/u_char_count = 10
 shader_parameter/u_edge_count = 4
 shader_parameter/u_glyph_px = 12.0
 shader_parameter/u_depth_pull = 0.02

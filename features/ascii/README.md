@@ -16,25 +16,26 @@ Mesh 表面采样 (SurfaceSampler.sample_arrays)
   → 每个点：位置 + 法线/棱方向 + 模型 albedo 色
   → MultiMesh 实例 (GlyphField；表面 / 棱边各一份)
   → glyph_billboard.gdshader
-	   表面：光照 → lum → ramp 下标（跳过棱边前缀）
-	   棱边：屏幕方向 → - / | \
+	   表面 / 棱边：光照 → lum → 同一暗→亮阶梯
+	   棱边另：lum' = mix(lum, 1, edge_bright) 偏亮，无 -/|\ 方向字（避免转视角跳变）
 	   颜色来自实例 COLOR（模型材质）
-  → glyph_bayer_overlay.gdshader（非自发光体）
+  → glyph_bayer_overlay.gdshader（非自发光体；棱边默认不加）
 ```
 
-表面映射：
+表面 / 棱边映射：
 
 ```
-index = edge_count + clamp(int(lum * surface_count), 0, surface_count - 1)
+lum' = edge ? mix(lum, 1.0, edge_bright) : lum
+index = edge_count + clamp(int(lum' * surface_count), 0, surface_count - 1)
 ```
 
-图集前 `edge_count`（默认 4）格为棱边字符 `- / | \`，其后为暗→亮阶梯。
+默认 `edge_count = 0`，整行图集都是 Bourke 风格亮度阶（` .:-=+*#%@`）。密棱边点仍单独采样，只是选字与表面同系。
 
 ## 文件
 
 | 文件 | 作用 | 所有权 |
 |------|------|--------|
-| `ascii_ramp.gd` / `ascii_ramp.tres` | 亮度阶梯字模 + 棱边前缀 | `.tres` 由编辑器持有；脚本定义资源类型 |
+| `ascii_ramp.gd` / `ascii_ramp.tres` | 暗→亮阶梯字模（可选旧版方向前缀） | `.tres` 由编辑器持有；脚本定义资源类型 |
 | `atlas.png` | 单行字形图集 | **生成物**，唯一写入者是 `tools/generate_ramp_atlas.py`，不要手改 |
 | `surface_sampler.gd` | 按面积采样 + 特征棱 + 去重 | 功能包内部 |
 | `glyph_field.gd` | 单网格或场景级生成 MultiMesh | 场景可 preload |
@@ -59,7 +60,8 @@ index = edge_count + clamp(int(lum * surface_count), 0, surface_count - 1)
 - `sample_surface` / `sample_edges`：开关两类采样。
 - `glyph_px`、`ramp`、`dither_pixel_size` / `dither_color_levels`：字符与 Bayer 外观。
 - `lod_enabled` / `lod_near` / `lod_far`：距离 LOD。开启后按相机距离钳制字号（`glyph_px_near`→`glyph_px_far`），表面用 seed 抽稀（`keep_*`）。棱边默认 `edge_keep_*=1`（**轮廓不抽稀**），且字号收缩更缓，保证剪影始终可读。**Shader 只能丢点不能加点**，近距要够密需把 `spacing` / `edge_step` 收到近距目标；走动时不 `rebuild()`。关闭 LOD 时行为与旧版一致（固定 `glyph_px`、不抽稀）。
-- `light_direction` / `ambient`：表面选字用的简化光照。
+- `edge_bright`：棱边选字向亮端混合（默认 0.35），轮廓醒目且无方向字跳变。
+- `light_direction` / `ambient`：选字用的简化光照。
 - `effect_enabled`：关闭时恢复宿主原材质并隐藏字符。
 - `emissive_body`、`core_energy`、`hide_from_lens`：自发光体与黑洞透镜剔除等特例；也可由材质 `emission_enabled` 自动识别。
 
