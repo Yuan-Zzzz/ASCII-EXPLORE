@@ -11,7 +11,7 @@ static func sample_mesh(mesh: Mesh, spacing: float = 0.35, seed: int = 1) -> Dic
 
 # 后台任务只接收主线程快照，不访问 Mesh 或场景树。
 static func sample_arrays(arrays: Array, spacing: float, seed: int) -> Dictionary:
-	spacing = maxf(spacing, 0.05)
+	spacing = maxf(spacing, 0.02)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 
@@ -115,8 +115,9 @@ static func sample_arrays(arrays: Array, spacing: float, seed: int) -> Dictionar
 
 
 ## 特征棱等距采样。返回 { "positions": PackedVector3Array, "directions": PackedVector3Array }
+## 棱边下限低于表面，以便轮廓可密于填充。
 static func sample_edges(arrays: Array, step: float = 0.2, threshold_deg: float = 25.0) -> Dictionary:
-	step = maxf(step, 0.02)
+	step = maxf(step, 0.008)
 	if arrays.is_empty():
 		return {"positions": PackedVector3Array(), "directions": PackedVector3Array()}
 

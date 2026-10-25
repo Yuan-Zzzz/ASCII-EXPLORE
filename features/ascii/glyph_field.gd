@@ -14,8 +14,8 @@ const EDGE_CHILD := &"__GlyphEdge"
 const MANAGED_META := &"_glyph_field_owner"
 
 @export var ramp: AsciiRamp
-@export_range(0.05, 10.0, 0.005, "or_greater") var spacing: float = 0.35
-@export_range(0.02, 10.0, 0.005, "or_greater") var edge_step: float = 0.2
+@export_range(0.02, 10.0, 0.005, "or_greater") var spacing: float = 0.35
+@export_range(0.008, 10.0, 0.001, "or_greater") var edge_step: float = 0.2
 @export_range(1.0, 89.0, 0.5) var edge_threshold: float = 25.0
 @export var sample_surface: bool = true
 @export var sample_edges: bool = true
@@ -25,6 +25,17 @@ const MANAGED_META := &"_glyph_field_owner"
 ## 每隔多少秒将 seed +1（越小变化越快）。
 @export_range(0.05, 10.0, 0.05, "or_greater", "suffix:s") var seed_interval: float = 0.5
 @export var glyph_px: float = 12.0
+## 近距密烘焙 + 远处 shader 抽稀/字号钳制；关闭时仅用 glyph_px，不抽稀。
+@export var lod_enabled: bool = false
+@export_range(0.1, 500.0, 0.1, "or_greater") var lod_near: float = 2.0
+@export_range(0.2, 2000.0, 0.1, "or_greater") var lod_far: float = 40.0
+@export_range(1.0, 128.0, 0.5) var glyph_px_near: float = 28.0
+@export_range(1.0, 128.0, 0.5) var glyph_px_far: float = 14.0
+@export_range(0.01, 1.0, 0.01) var keep_near: float = 1.0
+@export_range(0.01, 1.0, 0.01) var keep_far: float = 0.2
+## 棱边默认不抽稀（shader 内轮廓点始终保留）；保留导出以便特殊场景手动削弱。
+@export_range(0.01, 1.0, 0.01) var edge_keep_near: float = 1.0
+@export_range(0.01, 1.0, 0.01) var edge_keep_far: float = 1.0
 @export var emission_energy: float = 0.0
 @export_range(1.0, 8.0, 1.0) var dither_pixel_size: float = 2.0
 @export_range(2.0, 16.0, 1.0) var dither_color_levels: float = 4.0
@@ -294,7 +305,7 @@ static func _build_host_buffers(
 	const STRIDE := 20
 
 	if do_surface:
-		var sampled: Dictionary = SurfaceSamplerScript.sample_arrays(arrays, maxf(gap, 0.05), sample_seed)
+		var sampled: Dictionary = SurfaceSamplerScript.sample_arrays(arrays, maxf(gap, 0.02), sample_seed)
 		var positions: PackedVector3Array = sampled["positions"]
 		var normals: PackedVector3Array = sampled["normals"]
 		surface_count = positions.size()
@@ -303,7 +314,7 @@ static func _build_host_buffers(
 			_pack_instance(surface_buffer, i * STRIDE, positions[i], normals[i], color, rng.randf())
 
 	if do_edges:
-		var edges: Dictionary = SurfaceSamplerScript.sample_edges(arrays, maxf(estep, 0.02), ethresh)
+		var edges: Dictionary = SurfaceSamplerScript.sample_edges(arrays, maxf(estep, 0.008), ethresh)
 		var epos: PackedVector3Array = edges["positions"]
 		var edir: PackedVector3Array = edges["directions"]
 		edge_count = epos.size()
@@ -399,6 +410,9 @@ func _make_mmi(host: MeshInstance3D, is_edge: bool) -> MultiMeshInstance3D:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "__GlyphEdge" if is_edge else "__GlyphSurface"
 	mmi.cast_shadow = SHADOW_CASTING_SETTING_OFF
+	# 棱边略靠前排序，避免被表面点盖住
+	if is_edge:
+		mmi.sorting_offset = 0.08
 	mmi.set_meta(MANAGED_META, get_instance_id())
 	host.add_child(mmi)
 	if Engine.is_editor_hint():
@@ -443,6 +457,8 @@ func _ensure_material(mmi: MultiMeshInstance3D, is_edge: bool) -> void:
 	var sh: Shader = load("res://features/ascii/glyph_billboard.gdshader") as Shader
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
+	if is_edge:
+		mat.render_priority = 1
 	mmi.material_override = mat
 	mmi.set_meta(&"_is_edge", is_edge)
 
@@ -519,7 +535,11 @@ func _apply_params_to(mmi: MultiMeshInstance3D, is_edge: bool, host_emissive: bo
 	if mat == null or ramp == null:
 		return
 	_set_common_params(mat, is_edge)
-	var want_dither := effect_enabled and not host_emissive and not emissive_body
+	if is_edge:
+		mat.render_priority = 1
+		mmi.sorting_offset = 0.08
+	# 棱边不加 Bayer，保持 -/|\ 笔画干净
+	var want_dither := effect_enabled and not host_emissive and not emissive_body and not is_edge
 	if want_dither:
 		var key := "edge" if is_edge else "surface"
 		if not _dither_cache.has(key):
@@ -546,9 +566,27 @@ func _set_common_params(mat: ShaderMaterial, is_edge: bool) -> void:
 	mat.set_shader_parameter("u_light_dir", light_direction.normalized())
 	mat.set_shader_parameter("u_ambient", ambient)
 	mat.set_shader_parameter("u_mono", _mono)
+	mat.set_shader_parameter("u_lod_enabled", 1.0 if lod_enabled else 0.0)
+	mat.set_shader_parameter("u_lod_near", lod_near)
+	mat.set_shader_parameter("u_lod_far", maxf(lod_far, lod_near + 0.01))
+	mat.set_shader_parameter("u_glyph_px_near", glyph_px_near)
+	mat.set_shader_parameter("u_glyph_px_far", glyph_px_far)
+	mat.set_shader_parameter("u_keep_near", keep_near)
+	mat.set_shader_parameter("u_keep_far", keep_far)
+	# 棱边保留不低于表面（同端点）
+	mat.set_shader_parameter("u_edge_keep_near", maxf(edge_keep_near, keep_near))
+	mat.set_shader_parameter("u_edge_keep_far", maxf(edge_keep_far, keep_far))
 	var vp := get_viewport()
 	if vp:
 		mat.set_shader_parameter("u_viewport_size", vp.get_visible_rect().size)
+
+
+## 与 shader `_lod_t` / mix 一致，供测试与调试。
+static func lod_mix(d: float, near_d: float, far_d: float, v_near: float, v_far: float) -> float:
+	var n := minf(near_d, far_d - 0.001)
+	var f := maxf(far_d, n + 0.001)
+	var t := smoothstep(n, f, d)
+	return lerpf(v_near, v_far, t)
 
 
 func _resolve_albedo(host: MeshInstance3D) -> Color:
@@ -678,6 +716,8 @@ func _restore_host(host: MeshInstance3D) -> void:
 
 func set_glyph_px(px: float) -> void:
 	glyph_px = px
+	if lod_enabled:
+		glyph_px_near = px
 	_apply_params_all()
 
 

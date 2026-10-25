@@ -54,10 +54,11 @@ index = edge_count + clamp(int(lum * surface_count), 0, surface_count - 1)
 
 挂上即应用 **ASCII + Bayer**（编辑器与运行时同一套，`@tool`）。
 
-- `spacing` / `edge_step` / `edge_threshold` / `seed`：表面与棱边采样；改动后编辑器防抖重建。
+- `spacing` / `edge_step` / `edge_threshold` / `seed`：表面与棱边采样；改动后编辑器防抖重建。表面间距下限 0.02，棱边 `edge_step` 下限 0.008（轮廓可比填充更密）。
 - `animate_seed` / `seed_interval`：开启后每隔 `seed_interval` 秒将 seed +1，点位与字符抖动持续变化。
 - `sample_surface` / `sample_edges`：开关两类采样。
 - `glyph_px`、`ramp`、`dither_pixel_size` / `dither_color_levels`：字符与 Bayer 外观。
+- `lod_enabled` / `lod_near` / `lod_far`：距离 LOD。开启后按相机距离钳制字号（`glyph_px_near`→`glyph_px_far`），表面用 seed 抽稀（`keep_*`）。棱边默认 `edge_keep_*=1`（**轮廓不抽稀**），且字号收缩更缓，保证剪影始终可读。**Shader 只能丢点不能加点**，近距要够密需把 `spacing` / `edge_step` 收到近距目标；走动时不 `rebuild()`。关闭 LOD 时行为与旧版一致（固定 `glyph_px`、不抽稀）。
 - `light_direction` / `ambient`：表面选字用的简化光照。
 - `effect_enabled`：关闭时恢复宿主原材质并隐藏字符。
 - `emissive_body`、`core_energy`、`hide_from_lens`：自发光体与黑洞透镜剔除等特例；也可由材质 `emission_enabled` 自动识别。
